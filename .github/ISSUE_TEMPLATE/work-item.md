@@ -1,5 +1,5 @@
 ---
-name: "📝 New Work Item (WI)"
+name: "💼 New Work Item (WI)"
 about: "Describes a high-level feature or epic (e.g., Download Counter)."
 title: "WI: [BRIEF WI TITLE]"
 labels: "work-item, epic"

@@ -1,5 +1,5 @@
 ---
-name: "Bug Report (Incidence)"
+name: "🪲 Bug Report (Incidence)"
 about: "Report an error, defect, or unexpected behavior."
 title: "fix(scope): [BRIEF BUG DESCRIPTION]"
 
