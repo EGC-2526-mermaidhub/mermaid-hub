@@ -1,0 +1,36 @@
+name: Deploy to Render
+
+on:
+  workflow_run:
+    workflows: ["Pytest"]
+    types:
+      - completed
+
+jobs:
+  deploy_preprod:
+    if: github.ref == 'refs/heads/trunk'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to Pre-Production
+        env:
+          DEPLOY_URL_PRE: ${{ secrets.RENDER_DEPLOY_PRE }}
+        run: |
+          echo "Deploying to Pre-Production..."
+          curl -sS "$DEPLOY_URL_PRE"
+
+  deploy_prod:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to Production
+        env:
+          DEPLOY_URL_PROD: ${{ secrets.RENDER_DEPLOY_PROD }}
+        run: |
+          echo "Deploying to Production..."
+          curl -sS "$DEPLOY_URL_PROD"
