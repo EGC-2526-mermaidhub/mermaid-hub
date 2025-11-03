@@ -2,7 +2,7 @@ from flask_wtf import FlaskForm
 from wtforms import FieldList, FormField, SelectField, StringField, SubmitField, TextAreaField
 from wtforms.validators import URL, DataRequired, Optional
 
-from app.modules.dataset.models import PublicationType
+from app.modules.dataset.models import DiagramType
 
 
 class AuthorForm(FlaskForm):
@@ -22,18 +22,18 @@ class AuthorForm(FlaskForm):
         }
 
 
-class FeatureModelForm(FlaskForm):
-    uvl_filename = StringField("UVL Filename", validators=[DataRequired()])
+class MermaidDiagramForm(FlaskForm):
+    mmd_filename = StringField("MMD Filename", validators=[DataRequired()])
     title = StringField("Title", validators=[Optional()])
     desc = TextAreaField("Description", validators=[Optional()])
-    publication_type = SelectField(
-        "Publication type",
-        choices=[(pt.value, pt.name.replace("_", " ").title()) for pt in PublicationType],
+    diagram_type = SelectField(
+        "Diagram type",
+        choices=[(pt.value, pt.name.replace("_", " ").title()) for pt in DiagramType],
         validators=[Optional()],
     )
     publication_doi = StringField("Publication DOI", validators=[Optional(), URL()])
     tags = StringField("Tags (separated by commas)")
-    version = StringField("UVL Version")
+    version = StringField("MMD Version")
     authors = FieldList(FormField(AuthorForm))
 
     class Meta:
@@ -42,49 +42,49 @@ class FeatureModelForm(FlaskForm):
     def get_authors(self):
         return [author.get_author() for author in self.authors]
 
-    def get_fmmetadata(self):
+    def get_mdmetadata(self):
         return {
-            "uvl_filename": self.uvl_filename.data,
+            "mmd_filename": self.mmd_filename.data,
             "title": self.title.data,
             "description": self.desc.data,
-            "publication_type": self.publication_type.data,
+            "diagram_type": self.diagram_type.data,
             "publication_doi": self.publication_doi.data,
             "tags": self.tags.data,
-            "uvl_version": self.version.data,
+            "mmd_version": self.version.data,
         }
 
 
 class DataSetForm(FlaskForm):
     title = StringField("Title", validators=[DataRequired()])
     desc = TextAreaField("Description", validators=[DataRequired()])
-    publication_type = SelectField(
-        "Publication type",
-        choices=[(pt.value, pt.name.replace("_", " ").title()) for pt in PublicationType],
+    diagram_type = SelectField(
+        "Diagram type",
+        choices=[(pt.value, pt.name.replace("_", " ").title()) for pt in DiagramType],
         validators=[DataRequired()],
     )
     publication_doi = StringField("Publication DOI", validators=[Optional(), URL()])
     dataset_doi = StringField("Dataset DOI", validators=[Optional(), URL()])
     tags = StringField("Tags (separated by commas)")
     authors = FieldList(FormField(AuthorForm))
-    feature_models = FieldList(FormField(FeatureModelForm), min_entries=1)
+    mermaid_diagrams = FieldList(FormField(MermaidDiagramForm), min_entries=1)
 
     submit = SubmitField("Submit")
 
     def get_dsmetadata(self):
 
-        publication_type_converted = self.convert_publication_type(self.publication_type.data)
+        diagram_type_converted = self.convert_diagram_type(self.diagram_type.data)
 
         return {
             "title": self.title.data,
             "description": self.desc.data,
-            "publication_type": publication_type_converted,
+            "diagram_type": diagram_type_converted,
             "publication_doi": self.publication_doi.data,
             "dataset_doi": self.dataset_doi.data,
             "tags": self.tags.data,
         }
 
-    def convert_publication_type(self, value):
-        for pt in PublicationType:
+    def convert_diagram_type(self, value):
+        for pt in DiagramType:
             if pt.value == value:
                 return pt.name
         return "NONE"
@@ -92,5 +92,5 @@ class DataSetForm(FlaskForm):
     def get_authors(self):
         return [author.get_author() for author in self.authors]
 
-    def get_feature_models(self):
-        return [fm.get_feature_model() for fm in self.feature_models]
+    def get_mermaid_diagrams(self):
+        return [md.get_mermaid_diagrams() for md in self.mermaid_diagrams]

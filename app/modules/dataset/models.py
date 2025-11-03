@@ -7,26 +7,30 @@ from sqlalchemy import Enum as SQLAlchemyEnum
 from app import db
 
 
-class PublicationType(Enum):
-    NONE = "none"
-    ANNOTATION_COLLECTION = "annotationcollection"
-    BOOK = "book"
-    BOOK_SECTION = "section"
-    CONFERENCE_PAPER = "conferencepaper"
-    DATA_MANAGEMENT_PLAN = "datamanagementplan"
-    JOURNAL_ARTICLE = "article"
-    PATENT = "patent"
-    PREPRINT = "preprint"
-    PROJECT_DELIVERABLE = "deliverable"
-    PROJECT_MILESTONE = "milestone"
-    PROPOSAL = "proposal"
-    REPORT = "report"
-    SOFTWARE_DOCUMENTATION = "softwaredocumentation"
-    TAXONOMIC_TREATMENT = "taxonomictreatment"
-    TECHNICAL_NOTE = "technicalnote"
-    THESIS = "thesis"
-    WORKING_PAPER = "workingpaper"
-    OTHER = "other"
+class DiagramType(Enum):
+    FLOWCHART = "flowchart"
+    SEQUENCE_DIAGRAM = "sequence_diagram"
+    CLASS_DIAGRAM = "class_diagram"
+    STATE_DIAGRAM = "state_diagram"
+    ENTITY_RELATIONSHIP_DIAGRAM = "entity_relationship_diagram"
+    USER_JOURNEY = "user_journey"
+    GANTT = "gantt"
+    PIE_CHART = "pie_chart"
+    QUADRANT_CHART = "quadrant_chart"
+    REQUIREMENT_DIAGRAM = "requirement_diagram"
+    GITGRAPH_DIAGRAM = "gitgraph_diagram"
+    C4_DIAGRAM = "c4_diagram"
+    MINDMAPS = "mindmaps"
+    TIMELINE = "timeline"
+    ZENUML = "zenuml"
+    SANKEY = "sankey"
+    XYCHART = "xychart"
+    BLOCKDIAGRAM = "blockdiagram"
+    PACKET = "packet"
+    KANBAN = "kanban"
+    ARCHITECTURE = "architecture"
+    RADAR = "radar"
+    TREEMAP = "treemap"
 
 
 class Author(db.Model):
@@ -35,7 +39,7 @@ class Author(db.Model):
     affiliation = db.Column(db.String(120))
     orcid = db.Column(db.String(120))
     ds_meta_data_id = db.Column(db.Integer, db.ForeignKey("ds_meta_data.id"))
-    fm_meta_data_id = db.Column(db.Integer, db.ForeignKey("fm_meta_data.id"))
+    md_meta_data_id = db.Column(db.Integer, db.ForeignKey("md_meta_data.id"))
 
     def to_dict(self):
         return {"name": self.name, "affiliation": self.affiliation, "orcid": self.orcid}
@@ -43,11 +47,11 @@ class Author(db.Model):
 
 class DSMetrics(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    number_of_models = db.Column(db.String(120))
+    number_of_diagrams = db.Column(db.String(120))
     number_of_features = db.Column(db.String(120))
 
     def __repr__(self):
-        return f"DSMetrics<models={self.number_of_models}, features={self.number_of_features}>"
+        return f"DSMetrics<models={self.number_of_diagrams}, features={self.number_of_features}>"
 
 
 class DSMetaData(db.Model):
@@ -55,7 +59,7 @@ class DSMetaData(db.Model):
     deposition_id = db.Column(db.Integer)
     title = db.Column(db.String(120), nullable=False)
     description = db.Column(db.Text, nullable=False)
-    publication_type = db.Column(SQLAlchemyEnum(PublicationType), nullable=False)
+    diagram_type = db.Column(SQLAlchemyEnum(DiagramType), nullable=False)
     publication_doi = db.Column(db.String(120))
     dataset_doi = db.Column(db.String(120))
     tags = db.Column(db.String(120))
@@ -72,13 +76,13 @@ class DataSet(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     ds_meta_data = db.relationship("DSMetaData", backref=db.backref("data_set", uselist=False))
-    feature_models = db.relationship("FeatureModel", backref="data_set", lazy=True, cascade="all, delete")
+    mermaid_diagrams = db.relationship("MermaidDiagram", backref="data_set", lazy=True, cascade="all, delete")
 
     def name(self):
         return self.ds_meta_data.title
 
     def files(self):
-        return [file for fm in self.feature_models for file in fm.files]
+        return [file for md in self.mermaid_diagrams for file in md.files]
 
     def delete(self):
         db.session.delete(self)
@@ -101,10 +105,10 @@ class DataSet(db.Model):
 
         return SizeService().get_human_readable_size(self.get_file_total_size())
 
-    def get_uvlhub_doi(self):
+    def get_mermaidhub_doi(self):
         from app.modules.dataset.services import DataSetService
 
-        return DataSetService().get_uvlhub_doi(self)
+        return DataSetService().get_mermaidhub_doi(self)
 
     def to_dict(self):
         return {

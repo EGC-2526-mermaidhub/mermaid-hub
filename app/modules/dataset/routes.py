@@ -58,7 +58,7 @@ def create_dataset():
             logger.info("Creating dataset...")
             dataset = dataset_service.create_from_form(form=form, current_user=current_user)
             logger.info(f"Created dataset: {dataset}")
-            dataset_service.move_feature_models(dataset)
+            dataset_service.move_mermaid_diagrams(dataset)
         except Exception as exc:
             logger.exception(f"Exception while create dataset data in local {exc}")
             return jsonify({"Exception while create dataset data in local: ": str(exc)}), 400
@@ -81,9 +81,9 @@ def create_dataset():
             dataset_service.update_dsmetadata(dataset.ds_meta_data_id, deposition_id=deposition_id)
 
             try:
-                # iterate for each feature model (one feature model = one request to Zenodo)
-                for feature_model in dataset.feature_models:
-                    zenodo_service.upload_file(dataset, deposition_id, feature_model)
+                # iterate for each mermaid diagram(one mermaid diagram = one request to Zenodo)
+                for mermaid_diagram in dataset.mermaid_diagrams:
+                    zenodo_service.upload_file(dataset, deposition_id, mermaid_diagram)
 
                 # publish deposition
                 zenodo_service.publish_deposition(deposition_id)
@@ -92,7 +92,7 @@ def create_dataset():
                 deposition_doi = zenodo_service.get_doi(deposition_id)
                 dataset_service.update_dsmetadata(dataset.ds_meta_data_id, dataset_doi=deposition_doi)
             except Exception as e:
-                msg = f"it has not been possible upload feature models in Zenodo and update the DOI: {e}"
+                msg = f"it has not been possible upload mermaid diagrams in Zenodo and update the DOI: {e}"
                 return jsonify({"message": msg}), 200
 
         # Delete temp folder
@@ -122,7 +122,7 @@ def upload():
     file = request.files["file"]
     temp_folder = current_user.temp_folder()
 
-    if not file or not file.filename.endswith(".uvl"):
+    if not file or not file.filename.endswith(".mmd"):
         return jsonify({"message": "No valid file"}), 400
 
     # create temp folder
@@ -150,7 +150,7 @@ def upload():
     return (
         jsonify(
             {
-                "message": "UVL uploaded and validated successfully",
+                "message": "MMD uploaded and validated successfully",
                 "filename": new_filename,
             }
         ),

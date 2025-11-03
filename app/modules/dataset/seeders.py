@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 from app.modules.auth.models import User
-from app.modules.dataset.models import Author, DataSet, DSMetaData, DSMetrics, PublicationType
-from app.modules.featuremodel.models import FeatureModel, FMMetaData
+from app.modules.dataset.models import Author, DataSet, DSMetaData, DSMetrics,DiagramType
+from app.modules.mermaiddiagram.models import MermaidDiagram, MDMetaData
 from app.modules.hubfile.models import Hubfile
 from core.seeders.BaseSeeder import BaseSeeder
 
@@ -24,7 +24,7 @@ class DataSetSeeder(BaseSeeder):
             raise Exception("Users not found. Please seed users first.")
 
         # Create DSMetrics instance
-        ds_metrics = DSMetrics(number_of_models="5", number_of_features="50")
+        ds_metrics = DSMetrics(number_of_diagrams="5", number_of_features="50")
         seeded_ds_metrics = self.seed([ds_metrics])[0]
 
         # Create DSMetaData instances
@@ -33,7 +33,7 @@ class DataSetSeeder(BaseSeeder):
                 deposition_id=1 + i,
                 title=f"Sample dataset {i+1}",
                 description=f"Description for dataset {i+1}",
-                publication_type=PublicationType.DATA_MANAGEMENT_PLAN,
+                diagram_type=DiagramType.DATA_MANAGEMENT_PLAN,
                 publication_doi=f"10.1234/dataset{i+1}",
                 dataset_doi=f"10.1234/dataset{i+1}",
                 tags="tag1, tag2",
@@ -66,20 +66,20 @@ class DataSetSeeder(BaseSeeder):
         ]
         seeded_datasets = self.seed(datasets)
 
-        # Assume there are 12 UVL files, create corresponding FMMetaData and FeatureModel
-        fm_meta_data_list = [
-            FMMetaData(
-                uvl_filename=f"file{i+1}.uvl",
-                title=f"Feature Model {i+1}",
-                description=f"Description for feature model {i+1}",
-                publication_type=PublicationType.SOFTWARE_DOCUMENTATION,
+        # Assume there are 12 MMD files, create corresponding MDMetaData and MermaidDiagram
+        md_meta_data_list = [
+            MDMetaData(
+                mmd_filename=f"file{i+1}.mmd",
+                title=f"Mermaid Diagram {i+1}",
+                description=f"Description for mermaid diagram {i+1}",
+                diagram_type=DiagramType.CLASS_DIAGRAM,
                 publication_doi=f"10.1234/fm{i+1}",
                 tags="tag1, tag2",
-                uvl_version="1.0",
+                mmd_version="1.0",
             )
             for i in range(12)
         ]
-        seeded_fm_meta_data = self.seed(fm_meta_data_list)
+        seeded_md_meta_data = self.seed(md_meta_data_list)
 
         # Create Author instances and associate with FMMetaData
         fm_authors = [
@@ -87,26 +87,26 @@ class DataSetSeeder(BaseSeeder):
                 name=f"Author {i+5}",
                 affiliation=f"Affiliation {i+5}",
                 orcid=f"0000-0000-0000-000{i+5}",
-                fm_meta_data_id=seeded_fm_meta_data[i].id,
+                md_meta_data_id=seeded_md_meta_data[i].id,
             )
             for i in range(12)
         ]
         self.seed(fm_authors)
 
-        feature_models = [
-            FeatureModel(data_set_id=seeded_datasets[i // 3].id, fm_meta_data_id=seeded_fm_meta_data[i].id)
+        mermaid_diagrams = [
+            MermaidDiagram(data_set_id=seeded_datasets[i // 3].id, md_meta_data_id=seeded_md_meta_data[i].id)
             for i in range(12)
         ]
-        seeded_feature_models = self.seed(feature_models)
+        seeded_mermaid_diagrams = self.seed(mermaid_diagrams)
 
-        # Create files, associate them with FeatureModels and copy files
+        # Create files, associate them with MermaidDiagrams and copy files
         load_dotenv()
         working_dir = os.getenv("WORKING_DIR", "")
-        src_folder = os.path.join(working_dir, "app", "modules", "dataset", "uvl_examples")
+        src_folder = os.path.join(working_dir, "app", "modules", "dataset", "mmd_examples")
         for i in range(12):
-            file_name = f"file{i+1}.uvl"
-            feature_model = seeded_feature_models[i]
-            dataset = next(ds for ds in seeded_datasets if ds.id == feature_model.data_set_id)
+            file_name = f"file{i+1}.mmd"
+            mermaid_diagram = seeded_mermaid_diagrams[i]
+            dataset = next(ds for ds in seeded_datasets if ds.id == mermaid_diagram.data_set_id)
             user_id = dataset.user_id
 
             dest_folder = os.path.join(working_dir, "uploads", f"user_{user_id}", f"dataset_{dataset.id}")
@@ -115,10 +115,10 @@ class DataSetSeeder(BaseSeeder):
 
             file_path = os.path.join(dest_folder, file_name)
 
-            uvl_file = Hubfile(
+            mmd_file = Hubfile(
                 name=file_name,
                 checksum=f"checksum{i+1}",
                 size=os.path.getsize(file_path),
-                feature_model_id=feature_model.id,
+                mermaid_diagram_id=mermaid_diagram.id,
             )
-            self.seed([uvl_file])
+            self.seed([mmd_file])
