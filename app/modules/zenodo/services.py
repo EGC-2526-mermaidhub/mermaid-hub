@@ -303,7 +303,7 @@ class FakenodoService(BaseService):
             "version": 1,
             "state": "unsubmitted",
             "submitted": False,
-            "links": {}
+            "links": {},
         }
 
         self.depositions[dep_id] = deposition
@@ -320,7 +320,7 @@ class FakenodoService(BaseService):
             "filename": filename,
             "filesize": 1234,
             "checksum": self.checksum_counter,
-            "links": {"self": f"http://fakenodo/api/files/{self.file_id_counter}/{filename}"}
+            "links": {"self": f"http://fakenodo/api/files/{self.file_id_counter}/{filename}"},
         }
 
         deposition["files"].append(file_meta)
@@ -345,7 +345,7 @@ class FakenodoService(BaseService):
             "html": f"http://fakenodo/records/{deposition_id}",
             "doi": deposition["doi_url"],
             "files": f"http://fakenodo/api/records/{deposition_id}/files",
-            "publish": f"http://fakenodo/api/deposit/depositions/{deposition_id}/actions/publish"
+            "publish": f"http://fakenodo/api/deposit/depositions/{deposition_id}/actions/publish",
         }
 
         return deposition
