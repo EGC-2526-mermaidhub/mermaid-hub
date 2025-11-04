@@ -319,11 +319,20 @@
                         style="margin-right: 5px; margin-bottom: 5px; border-radius: 5px;">
                         <i data-feather="copy"></i>
                     </button>
+                    <button id="visualizeButton" class="btn btn-outline-success btn-sm" style="margin-right:5px; margin-bottom:5px; border-radius:5px;">
+                        <i data-feather="play"></i> Visualize diagram
+                    </button>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
             </div>
             <div class="modal-body" style="overflow-y: auto; height: calc(100vh - 50px);">
                 <pre id="fileContent" style="height: 100%; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; background-color: #f5f5f5; padding: 20px; border-radius: 5px; border: 1px solid #ccc;"></pre>
+                <div id="mermaidContainer" style="display:none; padding:20px; background-color: white; border-radius:5px; border:1px solid #ccc;"></div>
+                <div id="mermaidSpinner" style="display:none; position: absolute; right: 40px; top: 20px; z-index: 1051;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
 
             </div>
         </div>
@@ -340,12 +349,15 @@
     });
 
     var currentFileId;
+    var currentFileContent = '';
+    var mermaidLoaded = false;
 
     function viewFile(fileId) {
         fetch(`/file/view/${fileId}`)
             .then(response => response.json())
             .then(data => {
                 document.getElementById('fileContent').textContent = data.content;
+                currentFileContent = data.content || '';
                 currentFileId = fileId;
                 document.getElementById('downloadButton').href = `/file/download/${fileId}`;
                 var modal = new bootstrap.Modal(document.getElementById('fileViewerModal'));
@@ -353,6 +365,74 @@
             })
             .catch(error => console.error('Error loading file:', error));
     }
+
+    function ensureMermaidLoaded(callback) {
+        if (mermaidLoaded) {
+            callback();
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+        script.onload = () => {
+            try {
+                mermaid.initialize({startOnLoad: false, securityLevel: 'loose'});
+            } catch (e) {
+                console.warn('Mermaid init failed', e);
+            }
+            mermaidLoaded = true;
+            callback();
+        };
+        script.onerror = () => {
+            console.error('Failed to load mermaid.js');
+            alert('Could not load mermaid renderer.');
+        };
+        document.head.appendChild(script);
+    }
+
+    document.getElementById('visualizeButton').addEventListener('click', function () {
+        const pre = document.getElementById('fileContent');
+        const container = document.getElementById('mermaidContainer');
+        const btn = document.getElementById('visualizeButton');
+
+        if (container.style.display === 'block') {
+            container.style.display = 'none';
+            pre.style.display = 'block';
+            btn.innerHTML = '<i data-feather="play"></i> Visualize diagram';
+            feather.replace();
+            return;
+        }
+
+        if (!currentFileContent || currentFileContent.trim() === '') {
+            alert('No file content to render');
+            return;
+        }
+
+        ensureMermaidLoaded(() => {
+            const renderId = 'mermaid-' + (currentFileId || Date.now()) + '-' + Date.now();
+            try {
+                const renderResult = mermaid.render(renderId, currentFileContent);
+                if (renderResult && renderResult.then) {
+                    renderResult.then(obj => {
+                        container.innerHTML = obj.svg || obj;
+                        pre.style.display = 'none';
+                        container.style.display = 'block';
+                        btn.innerHTML = 'Show source';
+                    }).catch(err => {
+                        console.error('Mermaid render error', err);
+                        alert('Error rendering diagram: ' + err.message);
+                    });
+                } else {
+                    container.innerHTML = renderResult || '';
+                    pre.style.display = 'none';
+                    container.style.display = 'block';
+                    btn.innerHTML = 'Show source';
+                }
+            } catch (err) {
+                console.error('Mermaid render exception', err);
+                alert('Error rendering diagram: ' + (err && err.message ? err.message : err));
+            }
+        });
+    });
 
     function showLoading() {
         document.getElementById("loading").style.display = "initial";
