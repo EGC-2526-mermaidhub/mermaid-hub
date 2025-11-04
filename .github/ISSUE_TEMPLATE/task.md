@@ -1,7 +1,7 @@
 ---
 name: "📝 New Task"
 about: "A specific, technical task broken down from a larger WI."
-title: "task(module): [BRIEF TECHNICAL TASK TITLE]"
+title: "[BRIEF TECHNICAL TASK TITLE]"
 labels: "task"
 ---
 
