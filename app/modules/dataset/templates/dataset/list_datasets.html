@@ -16,15 +16,15 @@
                         <tr>
                             <th>Title</th>
                             <th>Description</th>
-                            <th>Publication type</th>
+                            <th>Diagram type</th>
                             <th>Dataset DOI</th>
                             <th>Options</th>
                         </tr>
                         </thead>
                         <tbody>
                         {% for dataset in datasets %}
-                            <tr>
-                                <td>
+                                <tr>
+                                    <td>
                                     <a href="{{ dataset.get_uvlhub_doi() }}">
                                         {{ dataset.ds_meta_data.title }}
                                     </a>
@@ -83,7 +83,7 @@
                                 <tr>
                                     <th>Title</th>
                                     <th>Description</th>
-                                    <th>Publication type</th>
+                                    <th>Diagram type</th>
                                     <th>Options</th>
                                 </tr>
                                 </thead>
