@@ -1,7 +1,7 @@
 from flask import render_template
 
 from app.modules.zenodo import zenodo_bp
-from app.modules.zenodo.services import ZenodoService, FakenodoService
+from app.modules.zenodo.services import FakenodoService
 
 
 @zenodo_bp.route("/zenodo", methods=["GET"])
@@ -11,5 +11,5 @@ def index():
 
 @zenodo_bp.route("/zenodo/test", methods=["GET"])
 def zenodo_test() -> dict:
-    service = FakenodoService() # ZenodoService()
+    service = FakenodoService()
     return service.test_full_connection()
