@@ -71,7 +71,7 @@
                             <div class="col-lg-6 col-6">
                                 <div class="mb-3">
                                     <label class="form-label">Diagram type</label>
-                                    {{ form.publication_type(class="form-control") }}
+                                    {{ form.diagram_type(class="form-control") }}
                                 </div>
 
                             </div>
@@ -346,25 +346,25 @@
 
                                 formContainer.innerHTML = `
                                     <div class="row">
-                                        <input type="hidden" value="${response.filename}" name="feature_models-${formUniqueId}-uvl_filename">
+                                        <input type="hidden" value="${response.filename}" name="mermaid_diagrams-${formUniqueId}-uvl_filename">
                                         <div class="col-12">
                                             <div class="row">
                                                 <div class="col-12">
                                                     <div class="mb-3">
                                                         <label class="form-label">Title</label>
-                                                        <input type="text" class="form-control" name="feature_models-${formUniqueId}-title">
+                                                        <input type="text" class="form-control" name="mermaid_diagrams-${formUniqueId}-title">
                                                     </div>
                                                 </div>
                                                 <div class="col-12">
                                                     <div class="mb-3">
                                                         <label class="form-label">Description</label>
-                                                        <textarea rows="4" class="form-control" name="feature_models-${formUniqueId}-desc"></textarea>
+                                                        <textarea rows="4" class="form-control" name="mermaid_diagrams-${formUniqueId}-desc"></textarea>
                                                     </div>
                                                 </div>
                                                 <div class="col-lg-6 col-12">
                                                     <div class="mb-3">
-                                                        <label class="form-label" for="publication_type">Diagram type</label>
-                                                        <select class="form-control" name="feature_models-${formUniqueId}-publication_type">
+                                                        <label class="form-label" for="diagram_type">Diagram type</label>
+                                                        <select class="form-control" name="mermaid_diagrams-${formUniqueId}-diagram_type">
                                                             <option value="none">None</option>
                                                             <option value="annotationcollection">Annotation Collection</option>
                                                             <option value="book">Book</option>
@@ -391,13 +391,13 @@
                                                 <div class="col-6">
                                                     <div class="mb-3">
                                                         <label class="form-label">Tags (separated by commas)</label>
-                                                        <input type="text" class="form-control" name="feature_models-${formUniqueId}-tags">
+                                                        <input type="text" class="form-control" name="mermaid_diagrams-${formUniqueId}-tags">
                                                     </div>
                                                 </div>
                                                 <div class="col-6">
                                                     <div class="mb-3">
                                                         <label class="form-label">Mermaid version</label>
-                                                        <input type="text" class="form-control" name="feature_models-${formUniqueId}-uvl_version">
+                                                        <input type="text" class="form-control" name="mermaid_diagrams-${formUniqueId}-uvl_version">
                                                     </div>
                                                 </div>
                                                 <div class="col-12">

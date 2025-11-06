@@ -51,7 +51,7 @@
                                 <td>
 
                                     {% if dataset.ds_meta_data.dataset_doi %}
-                                        <a href="{{ dataset.get_uvlhub_doi() }}">
+                                        <a href="{{ dataset.get_mermaidhub_doi() }}">
                                             {{ dataset.ds_meta_data.title }}
                                         </a>
                                     {% else %}
@@ -62,7 +62,7 @@
 
                                     
                                 </td>
-                                <td>{{ dataset.ds_meta_data.publication_type.name.replace('_', ' ').title() }}</td>
+                                <td>{{ dataset.ds_meta_data.diagram_type.name.replace('_', ' ').title() }}</td>
                             </tr>
                             {% else %}
                           

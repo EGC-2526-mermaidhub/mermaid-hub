@@ -38,7 +38,7 @@
                 <div class="d-flex align-items-center justify-content-between">
                     <h1><b>{{ dataset.ds_meta_data.title }}</b></h1>
                     <div>
-                        <span class="badge bg-secondary">{{ dataset.get_cleaned_publication_type() }}</span>
+                        <span class="badge bg-secondary">{{ dataset.get_cleaned_diagram_type() }}</span>
                     </div>
                 </div>
                 <p class="text-secondary">{{ dataset.created_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
@@ -162,7 +162,7 @@
             <div class="card-body" style="padding-top: 0px">
 
                 <div id="dataset_doi_uvlhub" style="display: none">
-                    {{ dataset.get_uvlhub_doi() }}
+                    {{ dataset.get_mermaidhub_doi() }}
                 </div>
 
                 <button type="button" class="btn doi_button btn-sm" onclick="copyText('dataset_doi_uvlhub')">
@@ -171,12 +171,12 @@
                         <b>DOI</b>
                     </span>
                     <span class="doi_text">
-                        {{ dataset.get_uvlhub_doi() }}
+                        {{ dataset.get_mermaidhub_doi() }}
                     </span>
                 </button>
                 
                 <div id="dataset_doi_uvlhub" style="display: none">
-                    {{ dataset.get_uvlhub_doi() }}
+                    {{ dataset.get_mermaidhub_doi() }}
                 </div>
                 
             </div>
@@ -246,8 +246,8 @@
             </div>
             
 
-            {% for feature_model in dataset.feature_models %}
-                {% for file in feature_model.files %}
+            {% for mermaid_diagram in dataset.mermaid_diagrams %}
+                {% for file in mermaid_diagram.files %}
                     <div class="list-group-item">
                         
                         <div class="row">
