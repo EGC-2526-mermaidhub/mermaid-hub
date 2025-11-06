@@ -7,7 +7,7 @@ from flask import Response, jsonify
 from flask_login import current_user
 
 from app.modules.dataset.models import DataSet
-from app.modules.featuremodel.models import FeatureModel
+from app.modules.mermaiddiagram.models import MermaidDiagram
 from app.modules.zenodo.repositories import ZenodoRepository
 from core.configuration.configuration import uploads_folder_name
 from core.services.BaseService import BaseService
@@ -164,7 +164,7 @@ class ZenodoService(BaseService):
                 for author in dataset.ds_meta_data.authors
             ],
             "keywords": (
-                ["uvlhub"] if not dataset.ds_meta_data.tags else dataset.ds_meta_data.tags.split(", ") + ["uvlhub"]
+                ["mermaidhub"] if not dataset.ds_meta_data.tags else dataset.ds_meta_data.tags.split(", ") + ["mermaidhub"]
             ),
             "access_right": "open",
             "license": "CC-BY-4.0",
@@ -178,22 +178,22 @@ class ZenodoService(BaseService):
             raise Exception(error_message)
         return response.json()
 
-    def upload_file(self, dataset: DataSet, deposition_id: int, feature_model: FeatureModel, user=None) -> dict:
+    def upload_file(self, dataset: DataSet, deposition_id: int, mermaid_diagram: MermaidDiagram, user=None) -> dict:
         """
         Upload a file to a deposition in Zenodo.
 
         Args:
             deposition_id (int): The ID of the deposition in Zenodo.
-            feature_model (FeatureModel): The FeatureModel object representing the feature model.
+            mermaid diagram(MermaidDiagram): The FeatureModel object representing the feature model.
             user (FeatureModel): The User object representing the file owner.
 
         Returns:
             dict: The response in JSON format with the details of the uploaded file.
         """
-        uvl_filename = feature_model.fm_meta_data.uvl_filename
-        data = {"name": uvl_filename}
+        mmd_filename = mermaid_diagram.md_meta_data.mmd_filename
+        data = {"name": mmd_filename}
         user_id = current_user.id if user is None else user.id
-        file_path = os.path.join(uploads_folder_name(), f"user_{str(user_id)}", f"dataset_{dataset.id}/", uvl_filename)
+        file_path = os.path.join(uploads_folder_name(), f"user_{str(user_id)}", f"dataset_{dataset.id}/", mmd_filename)
         files = {"file": open(file_path, "rb")}
 
         publish_url = f"{self.ZENODO_API_URL}/{deposition_id}/files"
@@ -246,3 +246,118 @@ class ZenodoService(BaseService):
             str: The DOI of the deposition.
         """
         return self.get_deposition(deposition_id).get("doi")
+
+
+class FakenodoService(BaseService):
+    id_counter = 100000
+    doi_counter = 1000000
+    file_id_counter = 10000000
+    checksum_counter = 1000000
+
+    def __init__(self):
+        self.depositions = {}
+
+    def test_full_connection(self):
+        return {"success": True, "messages": "OK"}
+
+    def get_all_depositions(self):
+        return list(self.depositions.values())
+
+    def create_new_deposition(self, dataset):
+        dep_id = self.id_counter
+        conceptrecid = f"fake-conceptrecid-{dep_id}"
+        self.id_counter += 1
+
+        metadata = {
+            "title": dataset.ds_meta_data.title,
+            "upload_type": "dataset" if dataset.ds_meta_data.diagram_type.value == "none" else "publication",
+            "diagram_type": (
+                dataset.ds_meta_data.diagram_type.value
+                if dataset.ds_meta_data.diagram_type.value != "none"
+                else None
+            ),
+            "description": dataset.ds_meta_data.description,
+            "creators": [
+                {
+                    "name": author.name,
+                    **({"affiliation": author.affiliation} if author.affiliation else {}),
+                    **({"orcid": author.orcid} if author.orcid else {}),
+                }
+                for author in dataset.ds_meta_data.authors
+            ],
+            "keywords": (
+                ["uvlhub"] if not dataset.ds_meta_data.tags else dataset.ds_meta_data.tags.split(", ") + ["uvlhub"]
+            ),
+            "access_right": "open",
+            "license": "CC-BY-4.0",
+        }
+
+        deposition = {
+            "id": dep_id,
+            "conceptrecid": conceptrecid,
+            "metadata": metadata,
+            "files": [],
+            "doi": None,
+            "doi_url": None,
+            "owner": dataset.user_id,
+            "version": 1,
+            "state": "unsubmitted",
+            "submitted": False,
+            "links": {},
+        }
+
+        self.depositions[dep_id] = deposition
+        return deposition
+
+    def upload_file(self, dataset, deposition_id, mermaid_diagram, user=None):
+        deposition = self.depositions.get(deposition_id)
+        if not deposition:
+            return {"error": "Deposition not found"}, 404
+
+        filename = mermaid_diagram.md_meta_data.mmd_filename
+        file_meta = {
+            "id": self.file_id_counter,
+            "filename": filename,
+            "filesize": 1234,
+            "checksum": self.checksum_counter,
+            "links": {"self": f"http://fakenodo/api/files/{self.file_id_counter}/{filename}"},
+        }
+
+        deposition["files"].append(file_meta)
+        self.file_id_counter += 1
+        self.checksum_counter += 1
+        return file_meta
+
+    def publish_deposition(self, deposition_id):
+        deposition = self.depositions.get(deposition_id)
+        if not deposition:
+            return {"error": "Deposition not found"}, 404
+
+        deposition["version"] += 1
+        deposition["doi"] = f"10.5281/fakenodo.{self.doi_counter}"
+        self.doi_counter += 1
+        deposition["doi_url"] = f"https://doi.org/{deposition['doi']}"
+        deposition["state"] = "done"
+        deposition["submitted"] = True
+
+        deposition["links"] = {
+            "self": f"http://fakenodo/api/records/{deposition_id}",
+            "html": f"http://fakenodo/records/{deposition_id}",
+            "doi": deposition["doi_url"],
+            "files": f"http://fakenodo/api/records/{deposition_id}/files",
+            "publish": f"http://fakenodo/api/deposit/depositions/{deposition_id}/actions/publish",
+        }
+
+        return deposition
+
+    def get_deposition(self, deposition_id):
+        deposition = self.depositions.get(deposition_id)
+        if not deposition:
+            return {"error": "Deposition not found"}, 404
+        return deposition
+
+    def get_doi(self, deposition_id):
+        deposition = self.depositions.get(deposition_id)
+        if not deposition:
+            return None
+        return deposition.get("doi")
