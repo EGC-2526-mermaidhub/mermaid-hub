@@ -33,7 +33,7 @@ class DataSetSeeder(BaseSeeder):
                 deposition_id=1 + i,
                 title=f"Sample dataset {i+1}",
                 description=f"Description for dataset {i+1}",
-                diagram_type=DiagramType.DATA_MANAGEMENT_PLAN,
+                diagram_type=DiagramType.ARCHITECTURE,
                 publication_doi=f"10.1234/dataset{i+1}",
                 dataset_doi=f"10.1234/dataset{i+1}",
                 tags="tag1, tag2",

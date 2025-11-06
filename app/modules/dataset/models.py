@@ -88,17 +88,17 @@ class DataSet(db.Model):
         db.session.delete(self)
         db.session.commit()
 
-    def get_cleaned_publication_type(self):
-        return self.ds_meta_data.publication_type.name.replace("_", " ").title()
+    def get_cleaned_diagram_type(self):
+        return self.ds_meta_data.diagram_type.name.replace("_", " ").title()
 
     def get_zenodo_url(self):
         return f"https://zenodo.org/record/{self.ds_meta_data.deposition_id}" if self.ds_meta_data.dataset_doi else None
 
     def get_files_count(self):
-        return sum(len(fm.files) for fm in self.feature_models)
+        return sum(len(fm.files) for fm in self.mermaid_diagrams)
 
     def get_file_total_size(self):
-        return sum(file.size for fm in self.feature_models for file in fm.files)
+        return sum(file.size for fm in self.mermaid_diagrams for file in fm.files)
 
     def get_file_total_size_for_human(self):
         from app.modules.dataset.services import SizeService
@@ -118,14 +118,14 @@ class DataSet(db.Model):
             "created_at_timestamp": int(self.created_at.timestamp()),
             "description": self.ds_meta_data.description,
             "authors": [author.to_dict() for author in self.ds_meta_data.authors],
-            "publication_type": self.get_cleaned_publication_type(),
+            "diagram_type": self.get_cleaned_diagram_type(),
             "publication_doi": self.ds_meta_data.publication_doi,
             "dataset_doi": self.ds_meta_data.dataset_doi,
             "tags": self.ds_meta_data.tags.split(",") if self.ds_meta_data.tags else [],
-            "url": self.get_uvlhub_doi(),
+            "url": self.get_mermaidhub_doi(),
             "download": f'{request.host_url.rstrip("/")}/dataset/download/{self.id}',
             "zenodo": self.get_zenodo_url(),
-            "files": [file.to_dict() for fm in self.feature_models for file in fm.files],
+            "files": [file.to_dict() for fm in self.mermaid_diagrams for file in fm.files],
             "files_count": self.get_files_count(),
             "total_size_in_bytes": self.get_file_total_size(),
             "total_size_in_human_format": self.get_file_total_size_for_human(),
