@@ -270,10 +270,10 @@ class FakenodoService(BaseService):
 
         metadata = {
             "title": dataset.ds_meta_data.title,
-            "upload_type": "dataset" if dataset.ds_meta_data.publication_type.value == "none" else "publication",
-            "publication_type": (
-                dataset.ds_meta_data.publication_type.value
-                if dataset.ds_meta_data.publication_type.value != "none"
+            "upload_type": "dataset" if dataset.ds_meta_data.diagram_type.value == "none" else "publication",
+            "diagram_type": (
+                dataset.ds_meta_data.diagram_type.value
+                if dataset.ds_meta_data.diagram_type.value != "none"
                 else None
             ),
             "description": dataset.ds_meta_data.description,
@@ -309,12 +309,12 @@ class FakenodoService(BaseService):
         self.depositions[dep_id] = deposition
         return deposition
 
-    def upload_file(self, dataset, deposition_id, feature_model, user=None):
+    def upload_file(self, dataset, deposition_id, mermaid_diagram, user=None):
         deposition = self.depositions.get(deposition_id)
         if not deposition:
             return {"error": "Deposition not found"}, 404
 
-        filename = feature_model.fm_meta_data.uvl_filename
+        filename = mermaid_diagram.md_meta_data.mmd_filename
         file_meta = {
             "id": self.file_id_counter,
             "filename": filename,
