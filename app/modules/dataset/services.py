@@ -5,7 +5,7 @@ import shutil
 import uuid
 from typing import Optional
 
-from flask import request
+from flask import request, url_for
 
 from app.modules.auth.services import AuthenticationService
 from app.modules.dataset.models import DataSet, DSMetaData, DSViewRecord
@@ -136,8 +136,13 @@ class DataSetService(BaseService):
         return self.dsmetadata_repository.update(id, **kwargs)
 
     def get_mermaidhub_doi(self, dataset: DataSet) -> str:
-        domain = os.getenv("DOMAIN", "localhost")
-        return f"http://{domain}/doi/{dataset.ds_meta_data.dataset_doi}"
+        try:
+            # Build an absolute URL using Flask's url_for so it works both locally and when deployed
+            return url_for('dataset.subdomain_index', doi=dataset.ds_meta_data.dataset_doi, _external=True)
+        except Exception:
+            # Fallback to DOMAIN env var for contexts where url_for is not available
+            domain = os.getenv("DOMAIN", "localhost")
+            return f"http://{domain}/doi/{dataset.ds_meta_data.dataset_doi}"
 
 
 class AuthorService(BaseService):
