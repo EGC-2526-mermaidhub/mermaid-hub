@@ -4,6 +4,8 @@ import os
 import shutil
 import tempfile
 import uuid
+import re
+import subprocess
 from datetime import datetime, timezone
 from zipfile import ZipFile
 
@@ -126,14 +128,12 @@ def upload():
     if not file or not file.filename.endswith(".mmd"):
         return jsonify({"message": "No valid file"}), 400
 
-    # create temp folder
     if not os.path.exists(temp_folder):
         os.makedirs(temp_folder)
 
     file_path = os.path.join(temp_folder, file.filename)
 
     if os.path.exists(file_path):
-        # Generate unique filename (by recursion)
         base_name, extension = os.path.splitext(file.filename)
         i = 1
         while os.path.exists(os.path.join(temp_folder, f"{base_name} ({i}){extension}")):
@@ -147,6 +147,82 @@ def upload():
         file.save(file_path)
     except Exception as e:
         return jsonify({"message": str(e)}), 500
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as fh:
+            content = fh.read()
+    except Exception:
+        content = ''
+
+    keywords = [
+        'graph', 'flowchart', 'sequenceDiagram', 'classDiagram', 'stateDiagram', 'pie',
+        'gantt', 'erDiagram', 'journey', 'gitGraph', 'gitgraph', 'c4', 'mindmap', 'timeline',
+        'sankey', 'radar'
+    ]
+    keywords_re = re.compile(r'^(?:' + '|'.join(keywords) + r')\b', re.I)
+    blocks = []
+    current = []
+    for line in content.splitlines():
+        if keywords_re.match(line.strip()):
+            if current:
+                blocks.append('\n'.join(current))
+            current = [line]
+        else:
+            if current:
+                current.append(line)
+    if current:
+        blocks.append('\n'.join(current))
+
+    if not blocks:
+        try:
+            os.remove(file_path)
+        except Exception:
+            pass
+        return jsonify({"message": "No Mermaid diagram detected in the uploaded file"}), 400
+
+    if len(blocks) > 1:
+        try:
+            os.remove(file_path)
+        except Exception:
+            pass
+        msg = (
+            "Multiple Mermaid diagrams detected in the uploaded file. "
+            "Please upload one diagram per file."
+        )
+        return (jsonify({"message": msg}), 400)
+
+    try:
+        mmdc_path = shutil.which('mmdc')
+        if mmdc_path:
+            tmp_out = tempfile.NamedTemporaryFile(suffix='.svg', delete=False)
+            tmp_out.close()
+            proc = subprocess.run(
+                [
+                    mmdc_path,
+                    '-i', file_path,
+                    '-o', tmp_out.name,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if proc.returncode != 0:
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    pass
+                stderr = proc.stderr.strip() if proc.stderr else 'Unknown mmdc error'
+                try:
+                    os.remove(tmp_out.name)
+                except Exception:
+                    pass
+                return jsonify({"message": f"Mermaid validation failed: {stderr}"}), 400
+            try:
+                os.remove(tmp_out.name)
+            except Exception:
+                pass
+    except Exception:
+        logger.exception('Exception while running mmdc validation')
 
     return (
         jsonify(

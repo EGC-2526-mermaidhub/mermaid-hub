@@ -220,30 +220,155 @@
                 <ul class="mt-2" id="file-list"></ul>
 
                 <script>
+
+                    // Load mermaid if needed and provide callbacks
+                    function ensureMermaidLoaded(callback) {
+                        if (window.mermaid) return callback(null);
+                        const s = document.createElement('script');
+                        s.src = 'https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js';
+                        s.onload = function () {
+                            try {
+                                if (window.mermaid && mermaid.initialize) {
+                                    mermaid.initialize({ startOnLoad: false });
+                                }
+                            } catch (e) {
+                            }
+                            callback(null);
+                        };
+                        s.onerror = function () {
+                            callback(new Error('Could not load mermaid library'));
+                        };
+                        document.head.appendChild(s);
+                    }
+
+                    function validateMermaidText(text) {
+                        try {
+                            if (window.mermaid && mermaid.parse) {
+                                mermaid.parse(text);
+                                return null;
+                            }
+                            return null;
+                        } catch (err) {
+                            return err && err.message ? err.message : String(err);
+                        }
+                    }
+
+                    function extractMermaidBlocks(text) {
+                        const lines = text.split(/\r?\n/);
+                        const keywords = [
+                            'graph', 'flowchart', 'sequenceDiagram', 'classDiagram', 'stateDiagram', 'pie', 'gantt',
+                            'erDiagram', 'journey', 'gitGraph', 'gitgraph', 'c4', 'mindmap', 'timeline', 'sankey', 'radar'
+                        ];
+                        const blocks = [];
+                        let current = null;
+
+                        const isStart = (line) => {
+                            if (!line) return false;
+                            const l = line.trim();
+                            for (const kw of keywords) {
+                                const re = new RegExp('^' + kw + '\\b', 'i');
+                                if (re.test(l)) return true;
+                            }
+                            return false;
+                        };
+
+                        for (const line of lines) {
+                            if (isStart(line)) {
+                                if (current !== null) {
+                                    blocks.push(current.join('\n'));
+                                }
+                                current = [line];
+                            } else {
+                                if (current !== null) current.push(line);
+                            }
+                        }
+                        if (current !== null) blocks.push(current.join('\n'));
+                        return blocks;
+                    }
+
                     let dropzone = Dropzone.options.myDropzone = {
                         url: "/dataset/file/upload",
                         paramName: 'file',
                         maxFilesize: 10,
                         acceptedFiles: '.mmd',
+                        accept: function(file, done) {
+                            const alerts = document.getElementById('alerts');
+                            const ext = file.name.split('.').pop();
+                            if (ext !== 'mmd') {
+                                const msg = 'Invalid file extension: ' + file.name + ' (use .mmd)';
+                                let alert = document.createElement('p');
+                                alert.textContent = msg;
+                                alerts.appendChild(alert);
+                                alerts.style.display = 'block';
+                                done(msg);
+                                const dz = this;
+                                setTimeout(() => dz.removeFile(file), 10);
+                                return;
+                            }
+
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                                const content = e.target.result;
+                                ensureMermaidLoaded((loadErr) => {
+                                    if (loadErr) {
+                                        console.warn('mermaid validation skipped:', loadErr);
+                                        done();
+                                        return;
+                                    }
+                                    const blocks = extractMermaidBlocks(content);
+                                    if (!blocks || blocks.length === 0) {
+                                        const msg = 'No Mermaid diagram detected in ' + file.name;
+                                        let alert = document.createElement('p');
+                                        alert.textContent = msg;
+                                        alerts.appendChild(alert);
+                                        alerts.style.display = 'block';
+                                        done(msg);
+                                        setTimeout(() => this.removeFile(file), 10);
+                                        return;
+                                    }
+                                    if (blocks.length > 1) {
+                                        const msg = 'Multiple Mermaid diagrams detected in ' + file.name + '. Please upload one diagram per file.';
+                                        let alert = document.createElement('p');
+                                        alert.textContent = msg;
+                                        alerts.appendChild(alert);
+                                        alerts.style.display = 'block';
+                                        done(msg);
+                                        setTimeout(() => this.removeFile(file), 10);
+                                        return;
+                                    }
+                                    const errMsg = validateMermaidText(blocks[0]);
+                                    if (errMsg) {
+                                        const msg = 'Mermaid syntax error in ' + file.name + ': ' + errMsg;
+                                        let alert = document.createElement('p');
+                                        alert.textContent = msg;
+                                        alerts.appendChild(alert);
+                                        alerts.style.display = 'block';
+                                        done(msg);
+                                        setTimeout(() => this.removeFile(file), 10);
+                                        return;
+                                    }
+                                    done();
+                                });
+                            };
+                            reader.onerror = () => {
+                                const msg = 'Could not read file ' + file.name;
+                                let alert = document.createElement('p');
+                                alert.textContent = msg;
+                                alerts.appendChild(alert);
+                                alerts.style.display = 'block';
+                                done(msg);
+                                setTimeout(() => this.removeFile(file), 10);
+                            };
+                            reader.readAsText(file);
+                        },
+
                         init: function () {
 
                             let fileList = document.getElementById('file-list');
                             let dropzoneText = document.getElementById('dropzone-text');
                             let alerts = document.getElementById('alerts');
 
-                            this.on('addedfile', function (file) {
-
-                                let ext = file.name.split('.').pop();
-                                if (ext !== 'mmd') {
-                                    this.removeFile(file);
-
-                                    let alert = document.createElement('p');
-                                    alert.textContent = 'Invalid file extension: ' + file.name + ' (use .mmd)';
-                                    alerts.appendChild(alert);
-                                    alerts.style.display = 'block';
-                                }
-
-                            });
+                            // 'addedfile' handled by Dropzone accept hook; no-op here
 
                             this.on('success', function (file, response) {
 
@@ -346,7 +471,7 @@
 
                                 formContainer.innerHTML = `
                                     <div class="row">
-                                        <input type="hidden" value="${response.filename}" name="mermaid_diagrams-${formUniqueId}-uvl_filename">
+                                        <input type="hidden" value="${response.filename}" name="mermaid_diagrams-${formUniqueId}-mmd_filename">
                                         <div class="col-12">
                                             <div class="row">
                                                 <div class="col-12">
@@ -365,25 +490,30 @@
                                                     <div class="mb-3">
                                                         <label class="form-label" for="diagram_type">Diagram type</label>
                                                         <select class="form-control" name="mermaid_diagrams-${formUniqueId}-diagram_type">
-                                                            <option value="none">None</option>
-                                                            <option value="annotationcollection">Annotation Collection</option>
-                                                            <option value="book">Book</option>
-                                                            <option value="section">Book Section</option>
-                                                            <option value="conferencepaper">Conference Paper</option>
-                                                            <option value="datamanagementplan">Data Management Plan</option>
-                                                            <option value="article">Journal Article</option>
-                                                            <option value="patent">Patent</option>
-                                                            <option value="preprint">Preprint</option>
-                                                            <option value="deliverable">Project Deliverable</option>
-                                                            <option value="milestone">Project Milestone</option>
-                                                            <option value="proposal">Proposal</option>
-                                                            <option value="report">Report</option>
-                                                            <option value="softwaredocumentation">Software Documentation</option>
-                                                            <option value="taxonomictreatment">Taxonomic Treatment</option>
-                                                            <option value="technicalnote">Technical Note</option>
-                                                            <option value="thesis">Thesis</option>
-                                                            <option value="workingpaper">Working Paper</option>
-                                                            <option value="other">Other</option>
+                                                            <option value="NONE">None</option>
+                                                            <option value="FLOWCHART">Flowchart</option>
+                                                            <option value="SEQUENCE_DIAGRAM">Sequence diagram</option>
+                                                            <option value="CLASS_DIAGRAM">Class diagram</option>
+                                                            <option value="STATE_DIAGRAM">State diagram</option>
+                                                            <option value="ENTITY_RELATIONSHIP_DIAGRAM">Entity-relationship diagram</option>
+                                                            <option value="USER_JOURNEY">User journey</option>
+                                                            <option value="GANTT">Gantt</option>
+                                                            <option value="PIE_CHART">Pie chart</option>
+                                                            <option value="QUADRANT_CHART">Quadrant chart</option>
+                                                            <option value="REQUIREMENT_DIAGRAM">Requirement diagram</option>
+                                                            <option value="GITGRAPH_DIAGRAM">Gitgraph diagram</option>
+                                                            <option value="C4_DIAGRAM">C4 diagram</option>
+                                                            <option value="MINDMAPS">Mindmaps</option>
+                                                            <option value="TIMELINE">Timeline</option>
+                                                            <option value="ZENUML">ZenUML</option>
+                                                            <option value="SANKEY">Sankey</option>
+                                                            <option value="XYCHART">XY chart</option>
+                                                            <option value="BLOCKDIAGRAM">Block diagram</option>
+                                                            <option value="PACKET">Packet</option>
+                                                            <option value="KANBAN">Kanban</option>
+                                                            <option value="ARCHITECTURE">Architecture</option>
+                                                            <option value="RADAR">Radar</option>
+                                                            <option value="TREEMAP">Treemap</option>
                                                         </select>
                                                     </div>
                                                 </div>
@@ -397,7 +527,7 @@
                                                 <div class="col-6">
                                                     <div class="mb-3">
                                                         <label class="form-label">Mermaid version</label>
-                                                        <input type="text" class="form-control" name="mermaid_diagrams-${formUniqueId}-uvl_version">
+                                                        <input type="text" class="form-control" name="mermaid_diagrams-${formUniqueId}-version">
                                                     </div>
                                                 </div>
                                                 <div class="col-12">

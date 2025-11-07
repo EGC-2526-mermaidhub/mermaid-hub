@@ -120,11 +120,47 @@ var currentId = 0;
 
         function write_upload_error(error_message) {
             let upload_error = document.getElementById("upload_error");
-            let alert = document.createElement('p');
-            alert.style.margin = '0';
-            alert.style.padding = '0';
-            alert.textContent = 'Upload error: ' + error_message;
-            upload_error.appendChild(alert);
+            // Accept strings, arrays or objects (WTForms returns nested objects).
+            function formatErrors(err) {
+                const out = [];
+                if (!err && err !== 0) return out;
+                if (typeof err === 'string') {
+                    out.push(err);
+                } else if (Array.isArray(err)) {
+                    for (const e of err) {
+                        out.push(...formatErrors(e));
+                    }
+                } else if (typeof err === 'object') {
+                    for (const k of Object.keys(err)) {
+                        const v = err[k];
+                        if (typeof v === 'string') out.push(v);
+                        else if (Array.isArray(v)) v.forEach(x => out.push(String(x)));
+                        else out.push(JSON.stringify(v));
+                    }
+                } else {
+                    out.push(String(err));
+                }
+                return out;
+            }
+
+            upload_error.innerHTML = '';
+            const messages = formatErrors(error_message);
+            if (messages.length === 0) {
+                // Fallback to a generic message
+                const alert = document.createElement('p');
+                alert.style.margin = '0';
+                alert.style.padding = '0';
+                alert.textContent = 'Upload error: Unexpected error';
+                upload_error.appendChild(alert);
+            } else {
+                for (const msg of messages) {
+                    const alert = document.createElement('p');
+                    alert.style.margin = '0';
+                    alert.style.padding = '0';
+                    alert.textContent = 'Upload error: ' + msg;
+                    upload_error.appendChild(alert);
+                }
+            }
             upload_error.style.display = 'block';
         }
 
@@ -210,7 +246,8 @@ var currentId = 0;
                                     });
                                 } else {
                                     response.json().then(data => {
-                                        console.error('Error: ' + data.message);
+                                        // Log structured error payload for easier debugging
+                                        console.error('Error: ', data.message);
                                         hide_loading();
 
                                         write_upload_error(data.message);
