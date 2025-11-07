@@ -1,22 +1,22 @@
 import logging
-import os
+# import os
 
-import requests
+# import requests
 from dotenv import load_dotenv
-from flask import Response, jsonify
-from flask_login import current_user
+# from flask import Response, jsonify
+# from flask_login import current_user
 
-from app.modules.dataset.models import DataSet
-from app.modules.mermaiddiagram.models import MermaidDiagram
-from app.modules.zenodo.repositories import ZenodoRepository
-from core.configuration.configuration import uploads_folder_name
+# from app.modules.dataset.models import DataSet
+# from app.modules.mermaiddiagram.models import MermaidDiagram
+# from app.modules.zenodo.repositories import ZenodoRepository
+# from core.configuration.configuration import uploads_folder_name
 from core.services.BaseService import BaseService
 
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-
+'''
 class ZenodoService(BaseService):
 
     def get_zenodo_url(self):
@@ -246,6 +246,8 @@ class ZenodoService(BaseService):
             str: The DOI of the deposition.
         """
         return self.get_deposition(deposition_id).get("doi")
+
+'''
 
 
 class FakenodoService(BaseService):
