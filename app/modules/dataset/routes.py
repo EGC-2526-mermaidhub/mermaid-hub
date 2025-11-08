@@ -262,9 +262,7 @@ def download_dataset(dataset_id):
         for subdir, dirs, files in os.walk(file_path):
             for file in files:
                 full_path = os.path.join(subdir, file)
-
                 relative_path = os.path.relpath(full_path, file_path)
-
                 zipf.write(
                     full_path,
                     arcname=os.path.join(os.path.basename(zip_path[:-4]), relative_path),
@@ -272,68 +270,46 @@ def download_dataset(dataset_id):
 
     user_cookie = request.cookies.get("download_cookie")
     if not user_cookie:
-        user_cookie = str(uuid.uuid4())  # Generate a new unique identifier if it does not exist
-        # Save the cookie to the user's browser
-        resp = make_response(
-            send_from_directory(
-                temp_dir,
-                f"dataset_{dataset_id}.zip",
-                as_attachment=True,
-                mimetype="application/zip",
-            )
-        )
-        resp.set_cookie("download_cookie", user_cookie)
-    else:
-        resp = send_from_directory(
+        user_cookie = str(uuid.uuid4())
+
+    DSDownloadRecordService().create(
+        user_id=current_user.id if current_user.is_authenticated else None,
+        dataset_id=dataset_id,
+        download_date=datetime.now(timezone.utc),
+        download_cookie=user_cookie,
+    )
+
+    resp = make_response(
+        send_from_directory(
             temp_dir,
             f"dataset_{dataset_id}.zip",
             as_attachment=True,
             mimetype="application/zip",
         )
-
-    # Check if the download record already exists for this cookie
-    existing_record = DSDownloadRecord.query.filter_by(
-        user_id=current_user.id if current_user.is_authenticated else None,
-        dataset_id=dataset_id,
-        download_cookie=user_cookie,
-    ).first()
-
-    if not existing_record:
-        # Record the download in your database
-        DSDownloadRecordService().create(
-            user_id=current_user.id if current_user.is_authenticated else None,
-            dataset_id=dataset_id,
-            download_date=datetime.now(timezone.utc),
-            download_cookie=user_cookie,
-        )
+    )
+    resp.set_cookie("download_cookie", user_cookie)
 
     return resp
-
 
 @dataset_bp.route("/doi/<path:doi>/", methods=["GET"])
 def subdomain_index(doi):
-
-    # Check if the DOI is an old DOI
     new_doi = doi_mapping_service.get_new_doi(doi)
     if new_doi:
-        # Redirect to the same path with the new DOI
         return redirect(url_for("dataset.subdomain_index", doi=new_doi), code=302)
 
-    # Try to search the dataset by the provided DOI (which should already be the new one)
     ds_meta_data = dsmetadata_service.filter_by_doi(doi)
-
     if not ds_meta_data:
         abort(404)
 
-    # Get dataset
     dataset = ds_meta_data.data_set
 
-    # Save the cookie to the user's browser
+    dataset.download_count = DSDownloadRecordService().get_download_count(dataset.id)
+
     user_cookie = ds_view_record_service.create_cookie(dataset=dataset)
     resp = make_response(render_template("dataset/view_dataset.html", dataset=dataset))
     resp.set_cookie("view_cookie", user_cookie)
-
     return resp
+
 
 
 @dataset_bp.route("/dataset/unsynchronized/<int:dataset_id>/", methods=["GET"])
@@ -345,5 +321,7 @@ def get_unsynchronized_dataset(dataset_id):
 
     if not dataset:
         abort(404)
+
+    dataset.download_count = DSDownloadRecordService().get_download_count(dataset.id)
 
     return render_template("dataset/view_dataset.html", dataset=dataset)
