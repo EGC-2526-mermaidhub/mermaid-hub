@@ -24,7 +24,7 @@ migrate = Migrate()
 limiter = Limiter(
     key_func=get_remote_address,
     storage_uri=os.environ.get("FLASK_LIMITER_STORAGE_URI", "memory://"),
-    default_limits=["500 per day", "50 per hour"],
+    default_limits=["150 per hour"],
     strategy="moving-window" 
 )
 

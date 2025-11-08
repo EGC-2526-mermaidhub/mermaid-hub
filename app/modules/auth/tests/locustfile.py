@@ -1,5 +1,4 @@
 from locust import HttpUser, TaskSet, task
-
 from core.environment.host import get_host_for_locust_testing
 from core.locust.common import fake, get_csrf_token
 
@@ -53,3 +52,4 @@ class AuthUser(HttpUser):
     min_wait = 5000
     max_wait = 9000
     host = get_host_for_locust_testing()
+
