@@ -17,6 +17,6 @@ class MermaidDiagramService(BaseService):
     def count_mermaid_diagrams(self):
         return self.repository.count_mermaid_diagrams()
 
-    class FMMetaDataService(BaseService):
+    class MDMetaDataService(BaseService):
         def __init__(self):
             super().__init__(MDMetaDataRepository())
