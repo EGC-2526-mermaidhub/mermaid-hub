@@ -1,6 +1,6 @@
 import logging
 # import os
-
+import random
 # import requests
 from dotenv import load_dotenv
 # from flask import Response, jsonify
@@ -251,13 +251,11 @@ class ZenodoService(BaseService):
 
 
 class FakenodoService(BaseService):
-    id_counter = 100000
-    doi_counter = 1000000
-    file_id_counter = 10000000
-    checksum_counter = 1000000
-
     def __init__(self):
         self.depositions = {}
+
+    def _generate_id(self):
+        return random.randint(1, 2_000_000_000)
 
     def test_full_connection(self):
         return {"success": True, "messages": "OK"}
@@ -266,9 +264,8 @@ class FakenodoService(BaseService):
         return list(self.depositions.values())
 
     def create_new_deposition(self, dataset):
-        dep_id = self.id_counter
+        dep_id = self._generate_id()
         conceptrecid = f"fake-conceptrecid-{dep_id}"
-        self.id_counter += 1
 
         metadata = {
             "title": dataset.ds_meta_data.title,
@@ -318,16 +315,14 @@ class FakenodoService(BaseService):
 
         filename = mermaid_diagram.md_meta_data.mmd_filename
         file_meta = {
-            "id": self.file_id_counter,
+            "id": self._generate_id(),
             "filename": filename,
             "filesize": 1234,
-            "checksum": self.checksum_counter,
-            "links": {"self": f"http://fakenodo/api/files/{self.file_id_counter}/{filename}"},
+            "checksum": self._generate_id(),
+            "links": {"self": f"http://fakenodo/api/files/{filename}"},
         }
 
         deposition["files"].append(file_meta)
-        self.file_id_counter += 1
-        self.checksum_counter += 1
         return file_meta
 
     def publish_deposition(self, deposition_id):
@@ -336,8 +331,7 @@ class FakenodoService(BaseService):
             return {"error": "Deposition not found"}, 404
 
         deposition["version"] += 1
-        deposition["doi"] = f"10.5281/fakenodo.{self.doi_counter}"
-        self.doi_counter += 1
+        deposition["doi"] = f"10.5281/fakenodo.{self._generate_id()}"
         deposition["doi_url"] = f"https://doi.org/{deposition['doi']}"
         deposition["state"] = "done"
         deposition["submitted"] = True
