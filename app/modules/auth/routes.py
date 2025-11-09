@@ -1,6 +1,8 @@
 from flask import redirect, render_template, request, url_for
 from flask_login import current_user, login_user, logout_user
 
+from app import limiter
+
 from app.modules.auth import auth_bp
 from app.modules.auth.forms import LoginForm, SignupForm
 from app.modules.auth.services import AuthenticationService
@@ -34,6 +36,7 @@ def show_signup_form():
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
+@limiter.limit("5/hour", methods=["POST"])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("public.index"))

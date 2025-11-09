@@ -102,3 +102,39 @@ def test_service_create_with_profile_fail_no_password(clean_database):
 
     assert UserRepository().count() == 0
     assert UserProfileRepository().count() == 0
+
+def test_rate_limit_blocking_integration(test_client):
+    
+    # 1. USAR EL PATH DIRECTO EN LUGAR DE URL_FOR
+    LOGIN_URL = "/login"
+    
+    # Extraer la aplicación para uso futuro, aunque no la necesitemos aquí
+    # app = test_client.application 
+    
+    TEST_EMAIL = "attacker@example.com"
+    TEST_PASSWORD = "wrongpassword"
+    
+    # 2. El bloque app_context() ES AHORA INNECESARIO Y LO ELIMINAMOS
+    # with app.app_context(): # <-- ELIMINAR ESTO
+    
+    # 1. Execute 5 attempts (Allowed)
+    for i in range(5):
+        response = test_client.post(
+            LOGIN_URL, data=dict(email=TEST_EMAIL, password=TEST_PASSWORD), follow_redirects=False
+        )
+        assert response.status_code == 200, f"Attempt {i+1} failed unexpectedly (status {response.status_code})"
+        print(f"Intento {i+1}: Consumed limit.")
+
+    # 2. Execute the 6th attempt (Critical Block)
+    response_blocked = test_client.post(
+        LOGIN_URL, data=dict(email=TEST_EMAIL, password=TEST_PASSWORD), follow_redirects=False
+    )
+    
+    # Assert 1: The response status code MUST be a redirect (302)
+    assert response_blocked.status_code == 302, f"Expected 302 status code for block, got {response_blocked.status_code}"
+    
+    # Assert 2: The redirect location MUST be the login page
+    # Ahora comparamos con la ruta string
+    assert response_blocked.headers["Location"].endswith(LOGIN_URL), "Redirected to wrong location."
+
+    print("Test Passed: Rate limit successfully blocked the 6th attempt.")
