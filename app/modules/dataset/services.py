@@ -25,6 +25,10 @@ from app.modules.hubfile.repositories import (
 )
 from core.services.BaseService import BaseService
 
+from app import db
+from sqlalchemy import func
+from app.modules.dataset.models import DSDownloadRecord
+
 logger = logging.getLogger(__name__)
 
 
@@ -72,7 +76,30 @@ class DataSetService(BaseService):
         return self.repository.get_unsynchronized_dataset(current_user_id, dataset_id)
 
     def latest_synchronized(self):
-        return self.repository.latest_synchronized()
+        datasets = self.repository.latest_synchronized()
+        for dataset in datasets:
+            dataset.download_count = self.dataset_downloads_id(dataset.id)
+        return datasets
+
+    def register_download(self, dataset_id: int, user_id: int = None) -> int:
+        from flask import request
+        import uuid
+
+        download_cookie = request.cookies.get("download_cookie")
+        if not download_cookie:
+            download_cookie = str(uuid.uuid4())
+
+        self.dsdownloadrecord_repository.register_download(
+            dataset_id=dataset_id,
+            user_id=user_id,
+            download_cookie=download_cookie
+        )
+
+        return self.dataset_downloads_id(dataset_id)
+
+    def get_download_count(self, dataset_id):
+        count = db.session.query(func.count(DSDownloadRecord.id)).filter(DSDownloadRecord.dataset_id == dataset_id).scalar()
+        return count or 0
 
     def count_synchronized_datasets(self):
         return self.repository.count_synchronized_datasets()
@@ -88,6 +115,9 @@ class DataSetService(BaseService):
 
     def total_dataset_downloads(self) -> int:
         return self.dsdownloadrecord_repository.total_dataset_downloads()
+
+    def dataset_downloads_id(self, dataset_id) -> int:
+        return self.dsdownloadrecord_repository.dataset_downloads_id(dataset_id) 
 
     def total_dataset_views(self) -> int:
         return self.dsviewrecord_repostory.total_dataset_views()
@@ -153,6 +183,12 @@ class AuthorService(BaseService):
 class DSDownloadRecordService(BaseService):
     def __init__(self):
         super().__init__(DSDownloadRecordRepository())
+
+    def get_download_count(self, dataset_id: int) -> int:
+        count = db.session.query(func.count(DSDownloadRecord.id)).filter(
+            DSDownloadRecord.dataset_id == dataset_id
+        ).scalar()
+        return count or 0
 
 
 class DSMetaDataService(BaseService):
