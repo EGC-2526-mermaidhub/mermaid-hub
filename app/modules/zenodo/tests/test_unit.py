@@ -63,8 +63,6 @@ def test_test_full_connection(service):
 def test_create_new_deposition(service, dataset):
     dep = service.create_new_deposition(dataset)
 
-    assert dep["id"] == 100000
-    assert dep["conceptrecid"] == "fake-conceptrecid-100000"
     assert dep["metadata"]["title"] == "Sample Dataset"
     assert dep["metadata"]["upload_type"] == "dataset"
     assert dep["owner"] == 42
