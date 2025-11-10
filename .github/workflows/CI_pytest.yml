@@ -66,7 +66,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install bandit
 
-      # Step 5: Run the pytest test suite (ignoring Selenium tests)
+      # Step 5: Run Bandit security scan
+      - name: Run Bandit Security Scan
+        run: |
+          bandit -r app \
+            --severity-level medium \
+            --confidence-level high \
+            --exclude "app/modules/*/tests/*,app/modules/conftest.py,app/modules/*/seeders.py"
+
+      # Step 6: Run the pytest test suite (ignoring Selenium tests)
       - name: Run Tests
         run: pytest app/modules/ --ignore-glob='*selenium*'
+
