@@ -3,8 +3,8 @@ import re
 import unidecode
 from sqlalchemy import any_, or_
 
-from app.modules.dataset.models import Author, DataSet, DSMetaData, DiagramType
-from app.modules.mermaiddiagram.models import MermaidDiagram, MDMetaData
+from app.modules.dataset.models import Author, DataSet, DiagramType, DSMetaData
+from app.modules.mermaiddiagram.models import MDMetaData, MermaidDiagram
 from core.repositories.BaseRepository import BaseRepository
 
 
