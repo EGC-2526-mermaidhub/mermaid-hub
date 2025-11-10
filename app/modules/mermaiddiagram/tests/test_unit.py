@@ -35,5 +35,6 @@ def test_count_mermaid_diagrams_delegates_to_repository(mermaid_service):
 
 def test_mdmetadata_service_initialization():
     from app.modules.mermaiddiagram.repositories import MDMetaDataRepository
+
     inner = MermaidDiagramService.MDMetaDataService()
     assert isinstance(inner.repository, MDMetaDataRepository)
