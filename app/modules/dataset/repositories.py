@@ -28,7 +28,7 @@ class DSDownloadRecordRepository(BaseRepository):
 
     def dataset_downloads_id(self, dataset_id: int) -> int:
         count = self.model.query.filter(self.model.dataset_id == dataset_id).count()
-        return count  
+        return count
 
     def register_download(self, dataset_id: int, user_id: int = None, download_cookie: str = None) -> DSDownloadRecord:
 
@@ -43,6 +43,7 @@ class DSDownloadRecordRepository(BaseRepository):
         )
 
         return download_record
+
 
 class DSMetaDataRepository(BaseRepository):
     def __init__(self):

@@ -117,7 +117,7 @@ class DataSetService(BaseService):
         return self.dsdownloadrecord_repository.total_dataset_downloads()
 
     def dataset_downloads_id(self, dataset_id) -> int:
-        return self.dsdownloadrecord_repository.dataset_downloads_id(dataset_id) 
+        return self.dsdownloadrecord_repository.dataset_downloads_id(dataset_id)
 
     def total_dataset_views(self) -> int:
         return self.dsviewrecord_repostory.total_dataset_views()

@@ -1,5 +1,4 @@
 import os
-import tempfile
 import pytest
 import uuid
 from unittest.mock import MagicMock, patch
@@ -226,12 +225,12 @@ def test_dsdownloadrecord_service_get_download_count_zero():
     """Test get_download_count returns 0 when no downloads exist"""
     service = DSDownloadRecordService()
     service.repository = MagicMock()
-    
+
     with patch("app.modules.dataset.services.db.session.query") as mock_query:
         mock_query.return_value.filter.return_value.scalar.return_value = None
-        
+
         result = service.get_download_count(1)
-        
+
         assert result == 0
 
 
@@ -239,12 +238,12 @@ def test_dsdownloadrecord_service_get_download_count_with_downloads():
     """Test get_download_count returns correct count when downloads exist"""
     service = DSDownloadRecordService()
     service.repository = MagicMock()
-    
+
     with patch("app.modules.dataset.services.db.session.query") as mock_query:
         mock_query.return_value.filter.return_value.scalar.return_value = 5
-        
+
         result = service.get_download_count(1)
-        
+
         assert result == 5
 
 
@@ -252,13 +251,13 @@ def test_dsdownloadrecord_service_get_download_count_large_number():
     """Test get_download_count handles large numbers correctly"""
     service = DSDownloadRecordService()
     service.repository = MagicMock()
-    
+
     with patch("app.modules.dataset.services.db.session.query") as mock_query:
         mock_filter = mock_query.return_value.filter.return_value
         mock_filter.scalar.return_value = 999999
-        
+
         result = service.get_download_count(1)
-        
+
         assert result == 999999
 
 
@@ -266,12 +265,12 @@ def test_dataset_service_get_download_count():
     """Test DataSetService get_download_count method"""
     service = DataSetService()
     service.repository = MagicMock()
-    
+
     with patch("app.modules.dataset.services.db.session.query") as mock_query:
         mock_query.return_value.filter.return_value.scalar.return_value = 10
-        
+
         result = service.get_download_count(1)
-        
+
         assert result == 10
 
 
@@ -280,9 +279,9 @@ def test_dataset_service_dataset_downloads_id():
     service = DataSetService()
     service.dsdownloadrecord_repository = MagicMock()
     service.dsdownloadrecord_repository.dataset_downloads_id.return_value = 7
-    
+
     result = service.dataset_downloads_id(1)
-    
+
     assert result == 7
     repo = service.dsdownloadrecord_repository
     repo.dataset_downloads_id.assert_called_once_with(1)
@@ -293,19 +292,19 @@ def test_dataset_service_latest_synchronized_with_download_counts():
     service = DataSetService()
     service.repository = MagicMock()
     service.dsdownloadrecord_repository = MagicMock()
-    
+
     # Create mock datasets
     dataset1 = MagicMock(id=1)
     dataset2 = MagicMock(id=2)
     dataset3 = MagicMock(id=3)
-    
+
     datasets = [dataset1, dataset2, dataset3]
     service.repository.latest_synchronized.return_value = datasets
     repo = service.dsdownloadrecord_repository
     repo.dataset_downloads_id.side_effect = [5, 10, 3]
-    
+
     result = service.latest_synchronized()
-    
+
     assert len(result) == 3
     assert result[0].download_count == 5
     assert result[1].download_count == 10
@@ -315,52 +314,52 @@ def test_dataset_service_latest_synchronized_with_download_counts():
 def test_dsdownloadrecord_repository_dataset_downloads_id_zero():
     """Test repository dataset_downloads_id returns 0 when no downloads"""
     from app.modules.dataset.repositories import DSDownloadRecordRepository
-    
+
     repo = DSDownloadRecordRepository()
     repo.model = MagicMock()
     repo.model.query.filter.return_value.count.return_value = 0
-    
+
     result = repo.dataset_downloads_id(1)
-    
+
     assert result == 0
 
 
 def test_dsdownloadrecord_repository_dataset_downloads_id_with_downloads():
     """Test repository dataset_downloads_id returns correct count"""
     from app.modules.dataset.repositories import DSDownloadRecordRepository
-    
+
     repo = DSDownloadRecordRepository()
     repo.model = MagicMock()
     repo.model.query.filter.return_value.count.return_value = 15
-    
+
     result = repo.dataset_downloads_id(1)
-    
+
     assert result == 15
 
 
 def test_dsdownloadrecord_repository_total_dataset_downloads_zero():
     """Test total_dataset_downloads returns 0 when no records"""
     from app.modules.dataset.repositories import DSDownloadRecordRepository
-    
+
     repo = DSDownloadRecordRepository()
     repo.model = MagicMock()
     repo.model.query.with_entities.return_value.scalar.return_value = None
-    
+
     result = repo.total_dataset_downloads()
-    
+
     assert result == 0
 
 
 def test_dsdownloadrecord_repository_total_dataset_downloads_with_records():
     """Test total_dataset_downloads returns max id when records exist"""
     from app.modules.dataset.repositories import DSDownloadRecordRepository
-    
+
     repo = DSDownloadRecordRepository()
     repo.model = MagicMock()
     repo.model.query.with_entities.return_value.scalar.return_value = 100
-    
+
     result = repo.total_dataset_downloads()
-    
+
     assert result == 100
 
 
@@ -377,6 +376,7 @@ def test_client(test_client):
         pass
 
     yield test_client
+
 
 # -- Simple authentication and data-validation tests --
 def test_upload_get_requires_login(test_client):
@@ -411,10 +411,10 @@ def test_file_upload_no_file(test_client):
     """Test file upload without file returns 400"""
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
-    
+
     response = test_client.post("/dataset/file/upload", data={})
     assert response.status_code == 400
-    
+
     test_client.get("/logout", follow_redirects=True)
 
 
@@ -422,14 +422,14 @@ def test_file_upload_invalid_extension(test_client):
     """Test file upload with invalid extension returns 400"""
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
-    
+
     # Need to create a BytesIO object to simulate a .txt upload
     from io import BytesIO
     data = {"file": (BytesIO(b"content"), "test.txt")}
     response = test_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
-    
+
     assert response.status_code == 400
-    
+
     test_client.get("/logout", follow_redirects=True)
 
 
@@ -437,29 +437,29 @@ def test_file_upload_no_mermaid_content(test_client):
     """Test file upload with no mermaid diagram returns 400"""
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
-    
+
     # Need to create a BytesIO object to simulate a .mmd upload
     from io import BytesIO
     import tempfile
-    
+
     temp_dir = tempfile.mkdtemp()
-    
+
     mock_user = MagicMock()
     mock_user.temp_folder = MagicMock(return_value=temp_dir)
     mock_user.id = 1
     mock_user.is_authenticated = True
-    
+
     with patch("app.modules.dataset.routes.current_user", mock_user):
         data = {"file": (BytesIO(b"invalid content"), "test.mmd")}
         response = test_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
-    
+
     assert response.status_code == 400
-    
+
     # We need to clean up the temporary directory created for this test
     import shutil
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
-    
+
     test_client.get("/logout", follow_redirects=True)
 
 
@@ -467,28 +467,28 @@ def test_file_upload_multiple_diagrams(test_client):
     """Test file upload with multiple diagrams returns 400"""
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
-    
+
     from io import BytesIO
     import tempfile
-    
+
     temp_dir = tempfile.mkdtemp()
-    
+
     mock_user = MagicMock()
     mock_user.temp_folder = MagicMock(return_value=temp_dir)
     mock_user.id = 1
     mock_user.is_authenticated = True
-    
+
     # Simulate a file with multiple mermaid diagrams
     with patch("app.modules.dataset.routes.current_user", mock_user):
         data = {"file": (BytesIO(b"graph TD\nA-->B\n\nflowchart LR\nC-->D"), "test.mmd")}
         response = test_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
-    
+
     assert response.status_code == 400
-    
+
     import shutil
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
-    
+
     test_client.get("/logout", follow_redirects=True)
 
 
@@ -496,30 +496,30 @@ def test_file_upload_valid_mermaid(test_client):
     """Test file upload with valid mermaid diagram succeeds"""
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
-    
+
     from io import BytesIO
     import tempfile
-    
+
     temp_dir = tempfile.mkdtemp()
-    
+
     mock_user = MagicMock()
     mock_user.temp_folder = MagicMock(return_value=temp_dir)
     mock_user.id = 1
     mock_user.is_authenticated = True
-    
+
     # Simulate a valid mermaid diagram file
     with patch("app.modules.dataset.routes.current_user", mock_user), \
          patch("shutil.which", return_value=None):
-        
+
         data = {"file": (BytesIO(b"graph TD\nA-->B"), "diagram.mmd")}
         response = test_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
-    
+
     assert response.status_code == 200
-    
+
     import shutil
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
-    
+
     test_client.get("/logout", follow_redirects=True)
 
 
@@ -527,24 +527,24 @@ def test_file_delete_nonexistent(test_client):
     """Test deleting non-existent file returns error"""
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
-    
+
     import tempfile
     temp_dir = tempfile.mkdtemp()
-    
+
     mock_user = MagicMock()
     mock_user.temp_folder = MagicMock(return_value=temp_dir)
     mock_user.id = 1
     mock_user.is_authenticated = True
-    
+
     with patch("app.modules.dataset.routes.current_user", mock_user):
         response = test_client.post("/dataset/file/delete", json={"file": "nonexistent.mmd"})
-    
+
     assert response.status_code == 200
-    
+
     import shutil
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
-    
+
     test_client.get("/logout", follow_redirects=True)
 
 
@@ -552,29 +552,29 @@ def test_file_delete_success(test_client):
     """Test deleting existing file succeeds"""
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
-    
+
     import tempfile
     temp_dir = tempfile.mkdtemp()
-    
+
     test_file = os.path.join(temp_dir, "test.mmd")
     with open(test_file, "w") as f:
         f.write("graph TD\nA-->B")
-    
+
     mock_user = MagicMock()
     mock_user.temp_folder = MagicMock(return_value=temp_dir)
     mock_user.id = 1
     mock_user.is_authenticated = True
-    
+
     with patch("app.modules.dataset.routes.current_user", mock_user):
         response = test_client.post("/dataset/file/delete", json={"file": "test.mmd"})
-    
+
     assert response.status_code == 200
     assert not os.path.exists(test_file)
-    
+
     import shutil
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
-    
+
     test_client.get("/logout", follow_redirects=True)
 
 
@@ -582,9 +582,9 @@ def test_doi_route_redirects_old_doi(test_client):
     """Test DOI route redirects old DOI to new DOI"""
     with patch("app.modules.dataset.routes.doi_mapping_service") as mock_service:
         mock_service.get_new_doi.return_value = "new_doi_123"
-        
+
         response = test_client.get("/doi/old_doi_123/", follow_redirects=False)
-        
+
         assert response.status_code == 302
         assert "new_doi_123" in response.location
 
@@ -595,9 +595,9 @@ def test_doi_route_not_found(test_client):
          patch("app.modules.dataset.routes.dsmetadata_service") as mock_ds:
         mock_doi.get_new_doi.return_value = None
         mock_ds.filter_by_doi.return_value = None
-        
+
         response = test_client.get("/doi/nonexistent/")
-        
+
         assert response.status_code == 404
 
 
@@ -606,14 +606,14 @@ def test_doi_route_renders_dataset(test_client):
     with patch("app.modules.dataset.routes.doi_mapping_service") as mock_doi, \
          patch("app.modules.dataset.routes.dsmetadata_service") as mock_ds, \
          patch("app.modules.dataset.routes.ds_view_record_service") as mock_view:
-        
+
         mock_doi.get_new_doi.return_value = None
         mock_dataset = MagicMock()
         mock_ds.filter_by_doi.return_value = MagicMock(data_set=mock_dataset)
         mock_view.create_cookie.return_value = str(uuid.uuid4())
-        
+
         response = test_client.get("/doi/valid_doi/")
-        
+
         assert response.status_code == 200
 
 
@@ -627,14 +627,14 @@ def test_unsynchronized_dataset_requires_login(test_client):
 def test_unsynchronized_dataset_not_found(test_client):
     """Test unsynchronized dataset returns 404 if not found"""
     test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
-    
+
     with patch("app.modules.dataset.routes.dataset_service") as mock_service:
         mock_service.get_unsynchronized_dataset.return_value = None
-        
+
         response = test_client.get("/dataset/unsynchronized/999/")
-        
+
         assert response.status_code == 404
-    
+
     test_client.get("/logout", follow_redirects=True)
 
 
@@ -642,37 +642,34 @@ def test_download_dataset_creates_zip(test_client):
     """Test dataset download creates zip file"""
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
-    
+
     import tempfile
     from zipfile import ZipFile
-    
+
     temp_dir = tempfile.mkdtemp()
     zip_path = os.path.join(temp_dir, "dataset_1.zip")
-    with ZipFile(zip_path, "w") as zipf:
+    with ZipFile(zip_path, "w"):
         pass
-    
+
     with patch("app.modules.dataset.routes.dataset_service") as mock_ds, \
-         patch("app.modules.dataset.routes.DSDownloadRecord") as mock_record, \
          patch("app.modules.dataset.routes.DSDownloadRecordService") as mock_record_service, \
          patch("os.walk", return_value=[]), \
          patch("tempfile.mkdtemp", return_value=temp_dir):
-        
+
         mock_dataset = MagicMock()
         mock_dataset.id = 1
         mock_dataset.user_id = 1
         mock_ds.get_or_404.return_value = mock_dataset
-        
-        mock_record.query.filter_by.return_value.first.return_value = None
-        
+
         response = test_client.get("/dataset/download/1")
-        
+
         assert response.status_code == 200
         mock_record_service.return_value.create.assert_called_once()
-    
+
     import shutil
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
-    
+
     test_client.get("/logout", follow_redirects=True)
 
 
@@ -699,7 +696,7 @@ def test_download_with_existing_cookie(test_client):
     # Crear directorio temporal y zip dummy
     temp_dir = tempfile.mkdtemp()
     zip_path = os.path.join(temp_dir, "dataset_1.zip")
-    with ZipFile(zip_path, "w") as zipf:
+    with ZipFile(zip_path, "w"):
         pass
 
     mock_dataset = MagicMock()
