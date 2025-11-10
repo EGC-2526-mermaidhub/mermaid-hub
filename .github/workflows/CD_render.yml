@@ -8,7 +8,7 @@ on:
 
 jobs:
   deploy_preprod:
-    if: github.event.workflow_run.head_branch == 'trunk'
+    if: github.event.workflow_run.conclusion == 'success' &&github.event.workflow_run.head_branch == 'trunk'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -22,7 +22,7 @@ jobs:
           curl -sS "$DEPLOY_URL_PRE"
 
   deploy_prod:
-    if: github.event.workflow_run.head_branch == 'main'
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
