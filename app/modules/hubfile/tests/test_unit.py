@@ -19,6 +19,7 @@ def test_hubfile():
     class TestHubfile:
         def __init__(self, name="diagram.mmd"):
             self.name = name
+
     return TestHubfile()
 
 
@@ -27,6 +28,7 @@ def test_user():
     class TestUser:
         def __init__(self):
             self.id = 10
+
     return TestUser()
 
 
@@ -35,6 +37,7 @@ def test_dataset():
     class TestDataset:
         def __init__(self):
             self.id = 20
+
     return TestDataset()
 
 
