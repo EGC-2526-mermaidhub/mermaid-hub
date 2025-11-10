@@ -1,8 +1,9 @@
 import os
-import pytest
 from unittest.mock import MagicMock, patch
 
-from app.modules.hubfile.services import HubfileService, HubfileDownloadRecordService
+import pytest
+
+from app.modules.hubfile.services import HubfileDownloadRecordService, HubfileService
 
 
 @pytest.fixture
