@@ -32,13 +32,13 @@ packages = ["rosemary"]
 # --------------------
 
 [tool.black]
-line-length = 120
+line-length = 130
 target-version = ["py313"]
 
 [tool.isort]
-line_length = 120
+line_length = 130
 profile = "black"
 
 [tool.flake8]
-max-line-length = 120
+max-line-length = 130
 extend-ignore = ["E203", "W503"]

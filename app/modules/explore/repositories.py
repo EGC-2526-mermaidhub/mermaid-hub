@@ -3,8 +3,8 @@ import re
 import unidecode
 from sqlalchemy import any_, or_
 
-from app.modules.dataset.models import Author, DataSet, DSMetaData, DiagramType
-from app.modules.mermaiddiagram.models import MermaidDiagram, MDMetaData
+from app.modules.dataset.models import Author, DataSet, DiagramType, DSMetaData
+from app.modules.mermaiddiagram.models import MDMetaData, MermaidDiagram
 from core.repositories.BaseRepository import BaseRepository
 
 
@@ -37,8 +37,8 @@ class ExploreRepository(BaseRepository):
             .join(DataSet.mermaid_diagrams)
             .join(MermaidDiagram.md_meta_data)
             .filter(or_(*filters))
-            .filter(DSMetaData.dataset_doi.isnot(None))  # Exclude datasets with empty dataset_doi
-        )
+            .filter(DSMetaData.dataset_doi.isnot(None))
+        )  # Exclude datasets with empty dataset_doi
 
         if diagram_type != "any":
             matching_type = None

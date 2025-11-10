@@ -28,9 +28,7 @@ def create_zip(uvus):
     # Check for exactly one .pdf file
     pdf_files = list(project_root.glob("*.pdf"))
     if len(pdf_files) != 1:
-        click.echo(
-            click.style(f"Error: Expected exactly one .pdf file in the project root. Found {len(pdf_files)}.", fg="red")
-        )
+        click.echo(click.style(f"Error: Expected exactly one .pdf file in the project root. Found {len(pdf_files)}.", fg="red"))
         return
 
     pdf_file = pdf_files[0]
