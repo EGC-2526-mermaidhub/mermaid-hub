@@ -82,12 +82,11 @@ def test_form(tmp_path):
 def test_calculate_checksum_and_size_creates_valid_sha256(tmp_path):
     file_path = tmp_path / "file.txt"
     file_path.write_bytes(b"abc")
-    
+
     checksum, size = calculate_checksum_and_size(str(file_path))
 
     assert checksum == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     assert size == 3
-
 
 
 def test_size_service_readable_formats():
