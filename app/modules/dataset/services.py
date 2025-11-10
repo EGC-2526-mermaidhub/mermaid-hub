@@ -36,8 +36,8 @@ def calculate_checksum_and_size(file_path):
     file_size = os.path.getsize(file_path)
     with open(file_path, "rb") as file:
         content = file.read()
-        hash_md5 = hashlib.md5(content).hexdigest()
-        return hash_md5, file_size
+        hash_sha256 = hashlib.sha256(content).hexdigest()
+        return hash_sha256, file_size
 
 
 class DataSetService(BaseService):
