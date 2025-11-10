@@ -1,16 +1,17 @@
 import os
-import pytest
 import uuid
 from unittest.mock import MagicMock, patch
+
+import pytest
 from flask import url_for
 
 from app.modules.dataset.services import (
-    calculate_checksum_and_size,
     DataSetService,
-    SizeService,
-    DSViewRecordService,
     DOIMappingService,
     DSDownloadRecordService,
+    DSViewRecordService,
+    SizeService,
+    calculate_checksum_and_size,
 )
 
 
@@ -447,8 +448,8 @@ def test_file_upload_no_mermaid_content(test_client):
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     # Need to create a BytesIO object to simulate a .mmd upload
-    from io import BytesIO
     import tempfile
+    from io import BytesIO
 
     temp_dir = tempfile.mkdtemp()
 
@@ -479,8 +480,8 @@ def test_file_upload_multiple_diagrams(test_client):
     )
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
-    from io import BytesIO
     import tempfile
+    from io import BytesIO
 
     temp_dir = tempfile.mkdtemp()
 
@@ -511,8 +512,8 @@ def test_file_upload_valid_mermaid(test_client):
     )
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
-    from io import BytesIO
     import tempfile
+    from io import BytesIO
 
     temp_dir = tempfile.mkdtemp()
 
@@ -705,12 +706,12 @@ def test_download_dataset_creates_zip(test_client):
 
 
 def test_download_with_existing_cookie(test_client):
-    import tempfile
-    import shutil
-    import uuid
-    from zipfile import ZipFile
-    from unittest.mock import MagicMock, patch
     import os
+    import shutil
+    import tempfile
+    import uuid
+    from unittest.mock import MagicMock, patch
+    from zipfile import ZipFile
 
     # Loguearse
     response = test_client.post(

@@ -1,4 +1,5 @@
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -7,8 +8,6 @@ from sqlalchemy import desc, func
 
 from app.modules.dataset.models import Author, DataSet, DOIMapping, DSDownloadRecord, DSMetaData, DSViewRecord
 from core.repositories.BaseRepository import BaseRepository
-
-import uuid
 
 logger = logging.getLogger(__name__)
 

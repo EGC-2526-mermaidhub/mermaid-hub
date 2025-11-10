@@ -6,9 +6,11 @@ import uuid
 from typing import Optional
 
 from flask import request, url_for
+from sqlalchemy import func
 
+from app import db
 from app.modules.auth.services import AuthenticationService
-from app.modules.dataset.models import DataSet, DSMetaData, DSViewRecord
+from app.modules.dataset.models import DataSet, DSDownloadRecord, DSMetaData, DSViewRecord
 from app.modules.dataset.repositories import (
     AuthorRepository,
     DataSetRepository,
@@ -17,17 +19,13 @@ from app.modules.dataset.repositories import (
     DSMetaDataRepository,
     DSViewRecordRepository,
 )
-from app.modules.mermaiddiagram.repositories import MermaidDiagramRepository, MDMetaDataRepository
 from app.modules.hubfile.repositories import (
     HubfileDownloadRecordRepository,
     HubfileRepository,
     HubfileViewRecordRepository,
 )
+from app.modules.mermaiddiagram.repositories import MDMetaDataRepository, MermaidDiagramRepository
 from core.services.BaseService import BaseService
-
-from app import db
-from sqlalchemy import func
-from app.modules.dataset.models import DSDownloadRecord
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +80,9 @@ class DataSetService(BaseService):
         return datasets
 
     def register_download(self, dataset_id: int, user_id: int = None) -> int:
-        from flask import request
         import uuid
+
+        from flask import request
 
         download_cookie = request.cookies.get("download_cookie")
         if not download_cookie:
