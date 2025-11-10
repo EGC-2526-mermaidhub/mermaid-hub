@@ -1,8 +1,11 @@
 import logging
+
 # import os
 import random
+
 # import requests
 from dotenv import load_dotenv
+
 # from flask import Response, jsonify
 # from flask_login import current_user
 
@@ -271,9 +274,7 @@ class FakenodoService(BaseService):
             "title": dataset.ds_meta_data.title,
             "upload_type": "dataset" if dataset.ds_meta_data.diagram_type.value == "none" else "publication",
             "diagram_type": (
-                dataset.ds_meta_data.diagram_type.value
-                if dataset.ds_meta_data.diagram_type.value != "none"
-                else None
+                dataset.ds_meta_data.diagram_type.value if dataset.ds_meta_data.diagram_type.value != "none" else None
             ),
             "description": dataset.ds_meta_data.description,
             "creators": [
