@@ -103,6 +103,7 @@ def test_service_create_with_profile_fail_no_password(clean_database):
     assert UserRepository().count() == 0
     assert UserProfileRepository().count() == 0
 
+
 # def test_rate_limit_blocking_integration(test_client):
 
 #   LOGIN_URL = "/login"
