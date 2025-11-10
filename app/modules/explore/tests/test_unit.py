@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from app.modules.explore.services import ExploreService
 
@@ -14,9 +14,9 @@ def explore_service():
 
 def test_filter_with_default_values(explore_service):
     result = explore_service.filter()
-    
+
     explore_service.repository.filter.assert_called_once_with(
-        "", "newest", "any", [], 
+        "", "newest", "any", [],
     )
     assert result == {"results": []}
 
@@ -25,7 +25,7 @@ def test_filter_with_custom_values(explore_service):
     explore_service.repository.filter.return_value = {
         "results": ["diagram1", "diagram2"]
     }
-    
+
     result = explore_service.filter(
         query="test",
         sorting="oldest",
@@ -34,7 +34,7 @@ def test_filter_with_custom_values(explore_service):
         page=2,
         per_page=10
     )
-    
+
     explore_service.repository.filter.assert_called_once_with(
         "test", "oldest", "FLOWCHART", ["flow", "chart"],
         page=2, per_page=10
@@ -45,7 +45,7 @@ def test_filter_with_custom_values(explore_service):
 def test_filter_handles_empty_tags_list(explore_service):
     explore_service.filter(tags=[])
     first_call_tags = explore_service.repository.filter.call_args[0][3]
-    
+
     explore_service.filter(tags=[])
     second_call_tags = explore_service.repository.filter.call_args[0][3]
 
@@ -59,7 +59,7 @@ def test_filter_forwards_additional_kwargs(explore_service):
         extra_param="value",
         another_param=123
     )
-    
+
     _, kwargs = explore_service.repository.filter.call_args
     assert kwargs["extra_param"] == "value"
     assert kwargs["another_param"] == 123
