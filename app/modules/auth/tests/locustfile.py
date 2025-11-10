@@ -52,4 +52,3 @@ class AuthUser(HttpUser):
     min_wait = 5000
     max_wait = 9000
     host = get_host_for_locust_testing()
-

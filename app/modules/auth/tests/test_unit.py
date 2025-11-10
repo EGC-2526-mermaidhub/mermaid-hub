@@ -103,13 +103,13 @@ def test_service_create_with_profile_fail_no_password(clean_database):
     assert UserRepository().count() == 0
     assert UserProfileRepository().count() == 0
 
-#def test_rate_limit_blocking_integration(test_client):
-    
+# def test_rate_limit_blocking_integration(test_client):
+
 #   LOGIN_URL = "/login"
-    
+
 #   TEST_EMAIL = "attacker@example.com"
 #   TEST_PASSWORD = "wrongpassword"
-    
+
 #   for i in range(5):
 #       response = test_client.post(
 #           LOGIN_URL, data=dict(email=TEST_EMAIL, password=TEST_PASSWORD), follow_redirects=False
@@ -120,9 +120,9 @@ def test_service_create_with_profile_fail_no_password(clean_database):
 #   response_blocked = test_client.post(
 #       LOGIN_URL, data=dict(email=TEST_EMAIL, password=TEST_PASSWORD), follow_redirects=False
 #   )
-    
+
 #   assert response_blocked.status_code == 302, f"Expected 302 status code for block, got {response_blocked.status_code}"
-    
+
 #   assert response_blocked.headers["Location"].endswith(LOGIN_URL), "Redirected to wrong location."
 
 #   print("Test Passed: Rate limit successfully blocked the 6th attempt.")
