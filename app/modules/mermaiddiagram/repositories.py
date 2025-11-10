@@ -1,6 +1,6 @@
 from sqlalchemy import func
 
-from app.modules.mermaiddiagram.models import MermaidDiagram, MDMetaData
+from app.modules.mermaiddiagram.models import MDMetaData, MermaidDiagram
 from core.repositories.BaseRepository import BaseRepository
 
 

@@ -1,16 +1,20 @@
 import logging
+
 # import os
 import random
+
 # import requests
 from dotenv import load_dotenv
-# from flask import Response, jsonify
-# from flask_login import current_user
 
 # from app.modules.dataset.models import DataSet
 # from app.modules.mermaiddiagram.models import MermaidDiagram
 # from app.modules.zenodo.repositories import ZenodoRepository
 # from core.configuration.configuration import uploads_folder_name
 from core.services.BaseService import BaseService
+
+# from flask import Response, jsonify
+# from flask_login import current_user
+
 
 logger = logging.getLogger(__name__)
 
@@ -271,9 +275,7 @@ class FakenodoService(BaseService):
             "title": dataset.ds_meta_data.title,
             "upload_type": "dataset" if dataset.ds_meta_data.diagram_type.value == "none" else "publication",
             "diagram_type": (
-                dataset.ds_meta_data.diagram_type.value
-                if dataset.ds_meta_data.diagram_type.value != "none"
-                else None
+                dataset.ds_meta_data.diagram_type.value if dataset.ds_meta_data.diagram_type.value != "none" else None
             ),
             "description": dataset.ds_meta_data.description,
             "creators": [
@@ -284,9 +286,7 @@ class FakenodoService(BaseService):
                 }
                 for author in dataset.ds_meta_data.authors
             ],
-            "keywords": (
-                ["uvlhub"] if not dataset.ds_meta_data.tags else dataset.ds_meta_data.tags.split(", ") + ["uvlhub"]
-            ),
+            "keywords": (["uvlhub"] if not dataset.ds_meta_data.tags else dataset.ds_meta_data.tags.split(", ") + ["uvlhub"]),
             "access_right": "open",
             "license": "CC-BY-4.0",
         }

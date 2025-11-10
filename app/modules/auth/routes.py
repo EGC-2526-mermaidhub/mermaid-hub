@@ -2,7 +2,6 @@ from flask import redirect, render_template, request, url_for
 from flask_login import current_user, login_user, logout_user
 
 from app import limiter
-
 from app.modules.auth import auth_bp
 from app.modules.auth.forms import LoginForm, SignupForm
 from app.modules.auth.services import AuthenticationService

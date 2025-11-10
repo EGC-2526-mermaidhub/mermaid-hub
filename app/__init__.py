@@ -1,12 +1,11 @@
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, redirect, url_for, flash
-from flask_migrate import Migrate
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, flash, redirect, url_for
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-
+from flask_migrate import Migrate
+from flask_sqlalchemy import SQLAlchemy
 
 from core.configuration.configuration import get_app_version
 from core.managers.config_manager import ConfigManager
@@ -25,15 +24,12 @@ limiter = Limiter(
     key_func=get_remote_address,
     storage_uri=os.environ.get("FLASK_LIMITER_STORAGE_URI", "memory://"),
     default_limits=["150 per hour"],
-    strategy="moving-window" 
+    strategy="moving-window",
 )
 
 
 def limit_exceeded_handler(e):
-    flash(
-        "You have exceeded the allowed login attempt limit. Please try again later.",
-        "danger" 
-    )
+    flash("You have exceeded the allowed login attempt limit. Please try again later.", "danger")
     return redirect(url_for("auth.login"))
 
 
@@ -57,7 +53,6 @@ def create_app(config_name="development"):
 
     limiter.init_app(app)
     app.register_error_handler(429, limit_exceeded_handler)
-    
     # Register login manager
     from flask_login import LoginManager
 

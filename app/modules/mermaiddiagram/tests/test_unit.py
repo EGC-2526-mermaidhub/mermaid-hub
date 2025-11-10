@@ -1,5 +1,6 @@
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
 
 from app.modules.mermaiddiagram.services import MermaidDiagramService
 
@@ -35,5 +36,6 @@ def test_count_mermaid_diagrams_delegates_to_repository(mermaid_service):
 
 def test_mdmetadata_service_initialization():
     from app.modules.mermaiddiagram.repositories import MDMetaDataRepository
+
     inner = MermaidDiagramService.MDMetaDataService()
     assert isinstance(inner.repository, MDMetaDataRepository)
