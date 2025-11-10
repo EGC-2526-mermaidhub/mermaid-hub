@@ -1,12 +1,11 @@
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, redirect, url_for, flash
-from flask_migrate import Migrate
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, flash, redirect, url_for
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-
+from flask_migrate import Migrate
+from flask_sqlalchemy import SQLAlchemy
 
 from core.configuration.configuration import get_app_version
 from core.managers.config_manager import ConfigManager
