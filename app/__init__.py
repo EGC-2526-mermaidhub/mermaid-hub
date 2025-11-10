@@ -25,15 +25,12 @@ limiter = Limiter(
     key_func=get_remote_address,
     storage_uri=os.environ.get("FLASK_LIMITER_STORAGE_URI", "memory://"),
     default_limits=["150 per hour"],
-    strategy="moving-window"
+    strategy="moving-window",
 )
 
 
 def limit_exceeded_handler(e):
-    flash(
-        "You have exceeded the allowed login attempt limit. Please try again later.",
-        "danger"
-    )
+    flash("You have exceeded the allowed login attempt limit. Please try again later.", "danger")
     return redirect(url_for("auth.login"))
 
 
