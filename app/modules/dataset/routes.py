@@ -148,29 +148,42 @@ def upload():
         return jsonify({"message": str(e)}), 500
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as fh:
+        with open(file_path, "r", encoding="utf-8") as fh:
             content = fh.read()
     except Exception:
-        content = ''
+        content = ""
 
     keywords = [
-        'graph', 'flowchart', 'sequenceDiagram', 'classDiagram', 'stateDiagram', 'pie',
-        'gantt', 'erDiagram', 'journey', 'gitGraph', 'gitgraph', 'c4', 'mindmap', 'timeline',
-        'sankey', 'radar'
+        "graph",
+        "flowchart",
+        "sequenceDiagram",
+        "classDiagram",
+        "stateDiagram",
+        "pie",
+        "gantt",
+        "erDiagram",
+        "journey",
+        "gitGraph",
+        "gitgraph",
+        "c4",
+        "mindmap",
+        "timeline",
+        "sankey",
+        "radar",
     ]
-    keywords_re = re.compile(r'^(?:' + '|'.join(keywords) + r')\b', re.I)
+    keywords_re = re.compile(r"^(?:" + "|".join(keywords) + r")\b", re.I)
     blocks = []
     current = []
     for line in content.splitlines():
         if keywords_re.match(line.strip()):
             if current:
-                blocks.append('\n'.join(current))
+                blocks.append("\n".join(current))
             current = [line]
         else:
             if current:
                 current.append(line)
     if current:
-        blocks.append('\n'.join(current))
+        blocks.append("\n".join(current))
 
     if not blocks:
         try:
@@ -184,22 +197,21 @@ def upload():
             os.remove(file_path)
         except Exception:
             pass
-        msg = (
-            "Multiple Mermaid diagrams detected in the uploaded file. "
-            "Please upload one diagram per file."
-        )
+        msg = "Multiple Mermaid diagrams detected in the uploaded file. " "Please upload one diagram per file."
         return (jsonify({"message": msg}), 400)
 
     try:
-        mmdc_path = shutil.which('mmdc')
+        mmdc_path = shutil.which("mmdc")
         if mmdc_path:
-            tmp_out = tempfile.NamedTemporaryFile(suffix='.svg', delete=False)
+            tmp_out = tempfile.NamedTemporaryFile(suffix=".svg", delete=False)
             tmp_out.close()
             proc = subprocess.run(
                 [
                     mmdc_path,
-                    '-i', file_path,
-                    '-o', tmp_out.name,
+                    "-i",
+                    file_path,
+                    "-o",
+                    tmp_out.name,
                 ],
                 capture_output=True,
                 text=True,
@@ -210,7 +222,7 @@ def upload():
                     os.remove(file_path)
                 except Exception:
                     pass
-                stderr = proc.stderr.strip() if proc.stderr else 'Unknown mmdc error'
+                stderr = proc.stderr.strip() if proc.stderr else "Unknown mmdc error"
                 try:
                     os.remove(tmp_out.name)
                 except Exception:
@@ -221,7 +233,7 @@ def upload():
             except Exception:
                 pass
     except Exception:
-        logger.exception('Exception while running mmdc validation')
+        logger.exception("Exception while running mmdc validation")
 
     return (
         jsonify(

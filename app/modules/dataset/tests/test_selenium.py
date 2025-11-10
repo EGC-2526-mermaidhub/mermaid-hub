@@ -9,9 +9,7 @@ from core.selenium.common import close_driver, initialize_driver
 
 
 def wait_for_page_to_load(driver, timeout=10):
-    WebDriverWait(driver, timeout).until(
-        lambda d: d.execute_script("return document.readyState") == "complete"
-    )
+    WebDriverWait(driver, timeout).until(lambda d: d.execute_script("return document.readyState") == "complete")
 
 
 def test_upload_dataset_with_mermaid():
@@ -40,15 +38,11 @@ def test_upload_dataset_with_mermaid():
         time.sleep(2)
 
         file_path = os.path.abspath("app/modules/dataset/mmd_examples/file1.mmd")
-        dropzone_input = WebDriverWait(driver, 10).until(
-            lambda d: d.find_element(By.CLASS_NAME, "dz-hidden-input")
-        )
+        dropzone_input = WebDriverWait(driver, 10).until(lambda d: d.find_element(By.CLASS_NAME, "dz-hidden-input"))
         dropzone_input.send_keys(file_path)
         time.sleep(2)
 
-        file_list_item = WebDriverWait(driver, 10).until(
-            lambda d: d.find_element(By.CSS_SELECTOR, "#file-list li")
-        )
+        file_list_item = WebDriverWait(driver, 10).until(lambda d: d.find_element(By.CSS_SELECTOR, "#file-list li"))
 
         show_info_button = file_list_item.find_element(By.CSS_SELECTOR, "button.info-button")
         show_info_button.click()

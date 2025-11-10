@@ -96,9 +96,7 @@ def test_size_service_readable_formats():
 
 def test_move_mermaid_diagrams(dataset_service, test_user, tmp_path):
     dataset = MagicMock()
-    dataset.mermaid_diagrams = [
-        MagicMock(md_meta_data=MagicMock(mmd_filename="diagram1.mmd"))
-    ]
+    dataset.mermaid_diagrams = [MagicMock(md_meta_data=MagicMock(mmd_filename="diagram1.mmd"))]
     src = test_user.temp_folder()
     os.makedirs(src, exist_ok=True)
     with open(os.path.join(src, "diagram1.mmd"), "wb") as f:
@@ -183,8 +181,9 @@ def test_get_mermaidhub_doi_with_flask_context(dataset_service):
 def test_get_mermaidhub_doi_fallback_to_domain(dataset_service):
     dataset = MagicMock()
     dataset.ds_meta_data.dataset_doi = "99999"
-    with patch("app.modules.dataset.services.url_for", side_effect=Exception()), patch.dict(
-        os.environ, {"DOMAIN": "example.com"}
+    with (
+        patch("app.modules.dataset.services.url_for", side_effect=Exception()),
+        patch.dict(os.environ, {"DOMAIN": "example.com"}),
     ):
         result = dataset_service.get_mermaidhub_doi(dataset)
         assert result == "http://example.com/doi/99999"
@@ -220,6 +219,7 @@ def test_doi_mapping_get_new_doi_not_found():
 
 
 # -- Download Count Tests --
+
 
 def test_dsdownloadrecord_service_get_download_count_zero():
     """Test get_download_count returns 0 when no downloads exist"""
@@ -365,6 +365,7 @@ def test_dsdownloadrecord_repository_total_dataset_downloads_with_records():
 
 # -- Integration tests --
 
+
 @pytest.fixture(scope="module")
 def test_client(test_client):
     """
@@ -409,7 +410,9 @@ def test_file_upload_requires_login(test_client):
 
 def test_file_upload_no_file(test_client):
     """Test file upload without file returns 400"""
-    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+    response = test_client.post(
+        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
+    )
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     response = test_client.post("/dataset/file/upload", data={})
@@ -420,11 +423,14 @@ def test_file_upload_no_file(test_client):
 
 def test_file_upload_invalid_extension(test_client):
     """Test file upload with invalid extension returns 400"""
-    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+    response = test_client.post(
+        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
+    )
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     # Need to create a BytesIO object to simulate a .txt upload
     from io import BytesIO
+
     data = {"file": (BytesIO(b"content"), "test.txt")}
     response = test_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
 
@@ -435,7 +441,9 @@ def test_file_upload_invalid_extension(test_client):
 
 def test_file_upload_no_mermaid_content(test_client):
     """Test file upload with no mermaid diagram returns 400"""
-    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+    response = test_client.post(
+        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
+    )
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     # Need to create a BytesIO object to simulate a .mmd upload
@@ -457,6 +465,7 @@ def test_file_upload_no_mermaid_content(test_client):
 
     # We need to clean up the temporary directory created for this test
     import shutil
+
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
 
@@ -465,7 +474,9 @@ def test_file_upload_no_mermaid_content(test_client):
 
 def test_file_upload_multiple_diagrams(test_client):
     """Test file upload with multiple diagrams returns 400"""
-    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+    response = test_client.post(
+        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
+    )
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     from io import BytesIO
@@ -486,6 +497,7 @@ def test_file_upload_multiple_diagrams(test_client):
     assert response.status_code == 400
 
     import shutil
+
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
 
@@ -494,7 +506,9 @@ def test_file_upload_multiple_diagrams(test_client):
 
 def test_file_upload_valid_mermaid(test_client):
     """Test file upload with valid mermaid diagram succeeds"""
-    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+    response = test_client.post(
+        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
+    )
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     from io import BytesIO
@@ -508,8 +522,7 @@ def test_file_upload_valid_mermaid(test_client):
     mock_user.is_authenticated = True
 
     # Simulate a valid mermaid diagram file
-    with patch("app.modules.dataset.routes.current_user", mock_user), \
-         patch("shutil.which", return_value=None):
+    with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
 
         data = {"file": (BytesIO(b"graph TD\nA-->B"), "diagram.mmd")}
         response = test_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
@@ -517,6 +530,7 @@ def test_file_upload_valid_mermaid(test_client):
     assert response.status_code == 200
 
     import shutil
+
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
 
@@ -525,10 +539,13 @@ def test_file_upload_valid_mermaid(test_client):
 
 def test_file_delete_nonexistent(test_client):
     """Test deleting non-existent file returns error"""
-    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+    response = test_client.post(
+        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
+    )
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     import tempfile
+
     temp_dir = tempfile.mkdtemp()
 
     mock_user = MagicMock()
@@ -542,6 +559,7 @@ def test_file_delete_nonexistent(test_client):
     assert response.status_code == 200
 
     import shutil
+
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
 
@@ -550,10 +568,13 @@ def test_file_delete_nonexistent(test_client):
 
 def test_file_delete_success(test_client):
     """Test deleting existing file succeeds"""
-    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+    response = test_client.post(
+        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
+    )
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     import tempfile
+
     temp_dir = tempfile.mkdtemp()
 
     test_file = os.path.join(temp_dir, "test.mmd")
@@ -572,6 +593,7 @@ def test_file_delete_success(test_client):
     assert not os.path.exists(test_file)
 
     import shutil
+
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
 
@@ -591,8 +613,10 @@ def test_doi_route_redirects_old_doi(test_client):
 
 def test_doi_route_not_found(test_client):
     """Test DOI route returns 404 for non-existent DOI"""
-    with patch("app.modules.dataset.routes.doi_mapping_service") as mock_doi, \
-         patch("app.modules.dataset.routes.dsmetadata_service") as mock_ds:
+    with (
+        patch("app.modules.dataset.routes.doi_mapping_service") as mock_doi,
+        patch("app.modules.dataset.routes.dsmetadata_service") as mock_ds,
+    ):
         mock_doi.get_new_doi.return_value = None
         mock_ds.filter_by_doi.return_value = None
 
@@ -603,9 +627,11 @@ def test_doi_route_not_found(test_client):
 
 def test_doi_route_renders_dataset(test_client):
     """Test DOI route renders dataset page successfully"""
-    with patch("app.modules.dataset.routes.doi_mapping_service") as mock_doi, \
-         patch("app.modules.dataset.routes.dsmetadata_service") as mock_ds, \
-         patch("app.modules.dataset.routes.ds_view_record_service") as mock_view:
+    with (
+        patch("app.modules.dataset.routes.doi_mapping_service") as mock_doi,
+        patch("app.modules.dataset.routes.dsmetadata_service") as mock_ds,
+        patch("app.modules.dataset.routes.ds_view_record_service") as mock_view,
+    ):
 
         mock_doi.get_new_doi.return_value = None
         mock_dataset = MagicMock()
@@ -640,7 +666,9 @@ def test_unsynchronized_dataset_not_found(test_client):
 
 def test_download_dataset_creates_zip(test_client):
     """Test dataset download creates zip file"""
-    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+    response = test_client.post(
+        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
+    )
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     import tempfile
@@ -651,10 +679,12 @@ def test_download_dataset_creates_zip(test_client):
     with ZipFile(zip_path, "w"):
         pass
 
-    with patch("app.modules.dataset.routes.dataset_service") as mock_ds, \
-         patch("app.modules.dataset.routes.DSDownloadRecordService") as mock_record_service, \
-         patch("os.walk", return_value=[]), \
-         patch("tempfile.mkdtemp", return_value=temp_dir):
+    with (
+        patch("app.modules.dataset.routes.dataset_service") as mock_ds,
+        patch("app.modules.dataset.routes.DSDownloadRecordService") as mock_record_service,
+        patch("os.walk", return_value=[]),
+        patch("tempfile.mkdtemp", return_value=temp_dir),
+    ):
 
         mock_dataset = MagicMock()
         mock_dataset.id = 1
@@ -667,6 +697,7 @@ def test_download_dataset_creates_zip(test_client):
         mock_record_service.return_value.create.assert_called_once()
 
     import shutil
+
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
 
@@ -704,10 +735,12 @@ def test_download_with_existing_cookie(test_client):
     mock_dataset.user_id = 1
 
     try:
-        with patch("app.modules.dataset.routes.dataset_service.get_or_404", return_value=mock_dataset), \
-             patch("os.walk", return_value=[]), \
-             patch("tempfile.mkdtemp", return_value=temp_dir), \
-             patch("app.modules.dataset.routes.DSDownloadRecordService.create") as mock_create:
+        with (
+            patch("app.modules.dataset.routes.dataset_service.get_or_404", return_value=mock_dataset),
+            patch("os.walk", return_value=[]),
+            patch("tempfile.mkdtemp", return_value=temp_dir),
+            patch("app.modules.dataset.routes.DSDownloadRecordService.create") as mock_create,
+        ):
 
             # Evitar que se cree registro real
             mock_create.return_value = None

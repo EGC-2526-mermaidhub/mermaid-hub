@@ -90,15 +90,15 @@ class DataSetService(BaseService):
             download_cookie = str(uuid.uuid4())
 
         self.dsdownloadrecord_repository.register_download(
-            dataset_id=dataset_id,
-            user_id=user_id,
-            download_cookie=download_cookie
+            dataset_id=dataset_id, user_id=user_id, download_cookie=download_cookie
         )
 
         return self.dataset_downloads_id(dataset_id)
 
     def get_download_count(self, dataset_id):
-        count = db.session.query(func.count(DSDownloadRecord.id)).filter(DSDownloadRecord.dataset_id == dataset_id).scalar()
+        count = (
+            db.session.query(func.count(DSDownloadRecord.id)).filter(DSDownloadRecord.dataset_id == dataset_id).scalar()
+        )
         return count or 0
 
     def count_synchronized_datasets(self):
@@ -168,7 +168,7 @@ class DataSetService(BaseService):
     def get_mermaidhub_doi(self, dataset: DataSet) -> str:
         try:
             # Build an absolute URL using Flask's url_for so it works both locally and when deployed
-            return url_for('dataset.subdomain_index', doi=dataset.ds_meta_data.dataset_doi, _external=True)
+            return url_for("dataset.subdomain_index", doi=dataset.ds_meta_data.dataset_doi, _external=True)
         except Exception:
             # Fallback to DOMAIN env var for contexts where url_for is not available
             domain = os.getenv("DOMAIN", "localhost")
@@ -185,9 +185,9 @@ class DSDownloadRecordService(BaseService):
         super().__init__(DSDownloadRecordRepository())
 
     def get_download_count(self, dataset_id: int) -> int:
-        count = db.session.query(func.count(DSDownloadRecord.id)).filter(
-            DSDownloadRecord.dataset_id == dataset_id
-        ).scalar()
+        count = (
+            db.session.query(func.count(DSDownloadRecord.id)).filter(DSDownloadRecord.dataset_id == dataset_id).scalar()
+        )
         return count or 0
 
 
