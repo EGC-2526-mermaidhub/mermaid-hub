@@ -37,8 +37,8 @@ class ExploreRepository(BaseRepository):
             .join(DataSet.mermaid_diagrams)
             .join(MermaidDiagram.md_meta_data)
             .filter(or_(*filters))
-            .filter(DSMetaData.dataset_doi.isnot(None))  # Exclude datasets with empty dataset_doi
-        )
+            .filter(DSMetaData.dataset_doi.isnot(None))
+        )  # Exclude datasets with empty dataset_doi
 
         if diagram_type != "any":
             matching_type = None

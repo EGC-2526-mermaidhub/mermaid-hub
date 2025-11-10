@@ -411,9 +411,7 @@ def test_file_upload_requires_login(test_client):
 
 def test_file_upload_no_file(test_client):
     """Test file upload without file returns 400"""
-    response = test_client.post(
-        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
-    )
+    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     response = test_client.post("/dataset/file/upload", data={})
@@ -424,9 +422,7 @@ def test_file_upload_no_file(test_client):
 
 def test_file_upload_invalid_extension(test_client):
     """Test file upload with invalid extension returns 400"""
-    response = test_client.post(
-        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
-    )
+    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     # Need to create a BytesIO object to simulate a .txt upload
@@ -442,9 +438,7 @@ def test_file_upload_invalid_extension(test_client):
 
 def test_file_upload_no_mermaid_content(test_client):
     """Test file upload with no mermaid diagram returns 400"""
-    response = test_client.post(
-        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
-    )
+    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     # Need to create a BytesIO object to simulate a .mmd upload
@@ -475,9 +469,7 @@ def test_file_upload_no_mermaid_content(test_client):
 
 def test_file_upload_multiple_diagrams(test_client):
     """Test file upload with multiple diagrams returns 400"""
-    response = test_client.post(
-        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
-    )
+    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     import tempfile
@@ -507,9 +499,7 @@ def test_file_upload_multiple_diagrams(test_client):
 
 def test_file_upload_valid_mermaid(test_client):
     """Test file upload with valid mermaid diagram succeeds"""
-    response = test_client.post(
-        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
-    )
+    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     import tempfile
@@ -540,9 +530,7 @@ def test_file_upload_valid_mermaid(test_client):
 
 def test_file_delete_nonexistent(test_client):
     """Test deleting non-existent file returns error"""
-    response = test_client.post(
-        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
-    )
+    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     import tempfile
@@ -569,9 +557,7 @@ def test_file_delete_nonexistent(test_client):
 
 def test_file_delete_success(test_client):
     """Test deleting existing file succeeds"""
-    response = test_client.post(
-        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
-    )
+    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     import tempfile
@@ -667,9 +653,7 @@ def test_unsynchronized_dataset_not_found(test_client):
 
 def test_download_dataset_creates_zip(test_client):
     """Test dataset download creates zip file"""
-    response = test_client.post(
-        "/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True
-    )
+    response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
     import tempfile

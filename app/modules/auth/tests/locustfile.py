@@ -41,9 +41,7 @@ class LoginBehavior(TaskSet):
 
         csrf_token = get_csrf_token(response)
 
-        response = self.client.post(
-            "/login", data={"email": "user1@example.com", "password": "1234", "csrf_token": csrf_token}
-        )
+        response = self.client.post("/login", data={"email": "user1@example.com", "password": "1234", "csrf_token": csrf_token})
         if response.status_code != 200:
             print(f"Login failed: {response.status_code}")
 

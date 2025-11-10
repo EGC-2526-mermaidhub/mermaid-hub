@@ -13,14 +13,7 @@ class HubfileRepository(BaseRepository):
         super().__init__(Hubfile)
 
     def get_owner_user_by_hubfile(self, hubfile: Hubfile) -> User:
-        return (
-            db.session.query(User)
-            .join(DataSet)
-            .join(MermaidDiagram)
-            .join(Hubfile)
-            .filter(Hubfile.id == hubfile.id)
-            .first()
-        )
+        return db.session.query(User).join(DataSet).join(MermaidDiagram).join(Hubfile).filter(Hubfile.id == hubfile.id).first()
 
     def get_dataset_by_hubfile(self, hubfile: Hubfile) -> DataSet:
         return db.session.query(DataSet).join(MermaidDiagram).join(Hubfile).filter(Hubfile.id == hubfile.id).first()

@@ -94,8 +94,7 @@ class DataSetSeeder(BaseSeeder):
         self.seed(fm_authors)
 
         mermaid_diagrams = [
-            MermaidDiagram(data_set_id=seeded_datasets[i // 3].id, md_meta_data_id=seeded_md_meta_data[i].id)
-            for i in range(12)
+            MermaidDiagram(data_set_id=seeded_datasets[i // 3].id, md_meta_data_id=seeded_md_meta_data[i].id) for i in range(12)
         ]
         seeded_mermaid_diagrams = self.seed(mermaid_diagrams)
 

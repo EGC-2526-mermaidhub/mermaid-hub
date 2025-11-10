@@ -22,11 +22,7 @@ class WebhookService(BaseService):
 
     def get_volume_name(self, container):
         volume_name = next(
-            (
-                mount.get("Name") or mount.get("Source")
-                for mount in container.attrs["Mounts"]
-                if mount["Destination"] == "/app"
-            ),
+            (mount.get("Name") or mount.get("Source") for mount in container.attrs["Mounts"] if mount["Destination"] == "/app"),
             None,
         )
 

@@ -95,9 +95,7 @@ class DataSetService(BaseService):
         return self.dataset_downloads_id(dataset_id)
 
     def get_download_count(self, dataset_id):
-        count = (
-            db.session.query(func.count(DSDownloadRecord.id)).filter(DSDownloadRecord.dataset_id == dataset_id).scalar()
-        )
+        count = db.session.query(func.count(DSDownloadRecord.id)).filter(DSDownloadRecord.dataset_id == dataset_id).scalar()
         return count or 0
 
     def count_synchronized_datasets(self):
@@ -143,9 +141,7 @@ class DataSetService(BaseService):
                     author = self.author_repository.create(commit=False, md_meta_data_id=mdmetadata.id, **author_data)
                     mdmetadata.authors.append(author)
 
-                md = self.mermaid_diagram_repository.create(
-                    commit=False, data_set_id=dataset.id, md_meta_data_id=mdmetadata.id
-                )
+                md = self.mermaid_diagram_repository.create(commit=False, data_set_id=dataset.id, md_meta_data_id=mdmetadata.id)
 
                 file_path = os.path.join(current_user.temp_folder(), mmd_filename)
                 checksum, size = calculate_checksum_and_size(file_path)
@@ -184,9 +180,7 @@ class DSDownloadRecordService(BaseService):
         super().__init__(DSDownloadRecordRepository())
 
     def get_download_count(self, dataset_id: int) -> int:
-        count = (
-            db.session.query(func.count(DSDownloadRecord.id)).filter(DSDownloadRecord.dataset_id == dataset_id).scalar()
-        )
+        count = db.session.query(func.count(DSDownloadRecord.id)).filter(DSDownloadRecord.dataset_id == dataset_id).scalar()
         return count or 0
 
 
