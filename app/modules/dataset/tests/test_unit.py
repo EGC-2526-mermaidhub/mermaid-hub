@@ -11,6 +11,7 @@ from app.modules.dataset.services import (
     SizeService,
     DSViewRecordService,
     DOIMappingService,
+    DSDownloadRecordService,
 )
 
 
@@ -209,6 +210,151 @@ def test_doi_mapping_get_new_doi_not_found():
     s.repository = MagicMock()
     s.repository.get_new_doi.return_value = None
     assert s.get_new_doi("old") is None
+
+
+# -- Download Count Tests --
+
+def test_dsdownloadrecord_service_get_download_count_zero():
+    """Test get_download_count returns 0 when no downloads exist"""
+    service = DSDownloadRecordService()
+    service.repository = MagicMock()
+    
+    with patch("app.modules.dataset.services.db.session.query") as mock_query:
+        mock_query.return_value.filter.return_value.scalar.return_value = None
+        
+        result = service.get_download_count(1)
+        
+        assert result == 0
+
+
+def test_dsdownloadrecord_service_get_download_count_with_downloads():
+    """Test get_download_count returns correct count when downloads exist"""
+    service = DSDownloadRecordService()
+    service.repository = MagicMock()
+    
+    with patch("app.modules.dataset.services.db.session.query") as mock_query:
+        mock_query.return_value.filter.return_value.scalar.return_value = 5
+        
+        result = service.get_download_count(1)
+        
+        assert result == 5
+
+
+def test_dsdownloadrecord_service_get_download_count_large_number():
+    """Test get_download_count handles large numbers correctly"""
+    service = DSDownloadRecordService()
+    service.repository = MagicMock()
+    
+    with patch("app.modules.dataset.services.db.session.query") as mock_query:
+        mock_filter = mock_query.return_value.filter.return_value
+        mock_filter.scalar.return_value = 999999
+        
+        result = service.get_download_count(1)
+        
+        assert result == 999999
+
+
+def test_dataset_service_get_download_count():
+    """Test DataSetService get_download_count method"""
+    service = DataSetService()
+    service.repository = MagicMock()
+    
+    with patch("app.modules.dataset.services.db.session.query") as mock_query:
+        mock_query.return_value.filter.return_value.scalar.return_value = 10
+        
+        result = service.get_download_count(1)
+        
+        assert result == 10
+
+
+def test_dataset_service_dataset_downloads_id():
+    """Test DataSetService dataset_downloads_id delegates to repository"""
+    service = DataSetService()
+    service.dsdownloadrecord_repository = MagicMock()
+    service.dsdownloadrecord_repository.dataset_downloads_id.return_value = 7
+    
+    result = service.dataset_downloads_id(1)
+    
+    assert result == 7
+    repo = service.dsdownloadrecord_repository
+    repo.dataset_downloads_id.assert_called_once_with(1)
+
+
+def test_dataset_service_latest_synchronized_with_download_counts():
+    """Test latest_synchronized populates download_count for each dataset"""
+    service = DataSetService()
+    service.repository = MagicMock()
+    service.dsdownloadrecord_repository = MagicMock()
+    
+    # Create mock datasets
+    dataset1 = MagicMock(id=1)
+    dataset2 = MagicMock(id=2)
+    dataset3 = MagicMock(id=3)
+    
+    datasets = [dataset1, dataset2, dataset3]
+    service.repository.latest_synchronized.return_value = datasets
+    repo = service.dsdownloadrecord_repository
+    repo.dataset_downloads_id.side_effect = [5, 10, 3]
+    
+    result = service.latest_synchronized()
+    
+    assert len(result) == 3
+    assert result[0].download_count == 5
+    assert result[1].download_count == 10
+    assert result[2].download_count == 3
+
+
+def test_dsdownloadrecord_repository_dataset_downloads_id_zero():
+    """Test repository dataset_downloads_id returns 0 when no downloads"""
+    from app.modules.dataset.repositories import DSDownloadRecordRepository
+    
+    repo = DSDownloadRecordRepository()
+    repo.model = MagicMock()
+    repo.model.query.filter.return_value.count.return_value = 0
+    
+    result = repo.dataset_downloads_id(1)
+    
+    assert result == 0
+
+
+def test_dsdownloadrecord_repository_dataset_downloads_id_with_downloads():
+    """Test repository dataset_downloads_id returns correct count"""
+    from app.modules.dataset.repositories import DSDownloadRecordRepository
+    
+    repo = DSDownloadRecordRepository()
+    repo.model = MagicMock()
+    repo.model.query.filter.return_value.count.return_value = 15
+    
+    result = repo.dataset_downloads_id(1)
+    
+    assert result == 15
+
+
+def test_dsdownloadrecord_repository_total_dataset_downloads_zero():
+    """Test total_dataset_downloads returns 0 when no records"""
+    from app.modules.dataset.repositories import DSDownloadRecordRepository
+    
+    repo = DSDownloadRecordRepository()
+    repo.model = MagicMock()
+    repo.model.query.with_entities.return_value.scalar.return_value = None
+    
+    result = repo.total_dataset_downloads()
+    
+    assert result == 0
+
+
+def test_dsdownloadrecord_repository_total_dataset_downloads_with_records():
+    """Test total_dataset_downloads returns max id when records exist"""
+    from app.modules.dataset.repositories import DSDownloadRecordRepository
+    
+    repo = DSDownloadRecordRepository()
+    repo.model = MagicMock()
+    repo.model.query.with_entities.return_value.scalar.return_value = 100
+    
+    result = repo.total_dataset_downloads()
+    
+    assert result == 100
+
 
 # -- Integration tests --
 
