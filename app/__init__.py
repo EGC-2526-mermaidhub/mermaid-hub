@@ -25,14 +25,14 @@ limiter = Limiter(
     key_func=get_remote_address,
     storage_uri=os.environ.get("FLASK_LIMITER_STORAGE_URI", "memory://"),
     default_limits=["150 per hour"],
-    strategy="moving-window" 
+    strategy="moving-window"
 )
 
 
 def limit_exceeded_handler(e):
     flash(
         "You have exceeded the allowed login attempt limit. Please try again later.",
-        "danger" 
+        "danger"
     )
     return redirect(url_for("auth.login"))
 
@@ -57,7 +57,6 @@ def create_app(config_name="development"):
 
     limiter.init_app(app)
     app.register_error_handler(429, limit_exceeded_handler)
-    
     # Register login manager
     from flask_login import LoginManager
 
