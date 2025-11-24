@@ -1,4 +1,4 @@
-2025-11-11 10:19:23,226 - app.modules.dataset.routes - ERROR - Exception while create dataset data in local (pymysql.err.OperationalError) (1054, "Unknown column 'diagram_type' in 'INSERT INTO'")
+2025-11-10 14:53:45,657 - app.modules.dataset.routes - ERROR - Exception while create dataset data in local (pymysql.err.OperationalError) (1054, "Unknown column 'diagram_type' in 'INSERT INTO'")
 [SQL: INSERT INTO ds_meta_data (deposition_id, title, description, diagram_type, publication_doi, dataset_doi, tags, ds_metrics_id) VALUES (%(deposition_id)s, %(title)s, %(description)s, %(diagram_type)s, %(publication_doi)s, %(dataset_doi)s, %(tags)s, %(ds_metrics_id)s)]
 [parameters: {'deposition_id': None, 'title': 'Sample UI', 'description': 'Sample UI description', 'diagram_type': 'FLOWCHART', 'publication_doi': None, 'dataset_doi': None, 'tags': 'tag1,tag2', 'ds_metrics_id': None}]
 (Background on this error at: https://sqlalche.me/e/20/e3q8)
@@ -31,12 +31,12 @@ pymysql.err.OperationalError: (1054, "Unknown column 'diagram_type' in 'INSERT I
 The above exception was the direct cause of the following exception:
 
 Traceback (most recent call last):
-  File "/home/vagrant/Escritorio/Proyecto/mermaid-hub/app/modules/dataset/routes.py", line 60, in create_dataset
+  File "/home/vagrant/Escritorio/Proyecto/mermaid-hub/app/modules/dataset/routes.py", line 61, in create_dataset
     dataset = dataset_service.create_from_form(form=form, current_user=current_user)
               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vagrant/Escritorio/Proyecto/mermaid-hub/app/modules/dataset/services.py", line 157, in create_from_form
+  File "/home/vagrant/Escritorio/Proyecto/mermaid-hub/app/modules/dataset/services.py", line 162, in create_from_form
     raise exc
-  File "/home/vagrant/Escritorio/Proyecto/mermaid-hub/app/modules/dataset/services.py", line 130, in create_from_form
+  File "/home/vagrant/Escritorio/Proyecto/mermaid-hub/app/modules/dataset/services.py", line 133, in create_from_form
     dsmetadata = self.dsmetadata_repository.create(**form.get_dsmetadata())
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/vagrant/Escritorio/Proyecto/mermaid-hub/core/repositories/BaseRepository.py", line 17, in create
