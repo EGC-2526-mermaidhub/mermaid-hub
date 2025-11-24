@@ -26,9 +26,7 @@ def locust(module):
                 raise click.UsageError(f"module '{module}' does not exist.")
             locustfile_path = os.path.join(module_path, "tests", "locustfile.py")
             if not os.path.exists(locustfile_path):
-                raise click.UsageError(
-                    f"Locustfile for module '{module}' does not exist at path " f"'{locustfile_path}'."
-                )
+                raise click.UsageError(f"Locustfile for module '{module}' does not exist at path " f"'{locustfile_path}'.")
 
     def run_docker_locust(volume_name, module):
         """Build and run the Locust container with the specified volume."""

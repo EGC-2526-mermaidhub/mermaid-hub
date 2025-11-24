@@ -5,9 +5,9 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 from app.modules.auth.models import User
-from app.modules.dataset.models import Author, DataSet, DSMetaData, DSMetrics,DiagramType
-from app.modules.mermaiddiagram.models import MermaidDiagram, MDMetaData
+from app.modules.dataset.models import Author, DataSet, DiagramType, DSMetaData, DSMetrics
 from app.modules.hubfile.models import Hubfile
+from app.modules.mermaiddiagram.models import MDMetaData, MermaidDiagram
 from core.seeders.BaseSeeder import BaseSeeder
 
 
@@ -94,8 +94,7 @@ class DataSetSeeder(BaseSeeder):
         self.seed(fm_authors)
 
         mermaid_diagrams = [
-            MermaidDiagram(data_set_id=seeded_datasets[i // 3].id, md_meta_data_id=seeded_md_meta_data[i].id)
-            for i in range(12)
+            MermaidDiagram(data_set_id=seeded_datasets[i // 3].id, md_meta_data_id=seeded_md_meta_data[i].id) for i in range(12)
         ]
         seeded_mermaid_diagrams = self.seed(mermaid_diagrams)
 

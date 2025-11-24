@@ -1,11 +1,11 @@
 import json
 import logging
 import os
+import re
 import shutil
+import subprocess
 import tempfile
 import uuid
-import re
-import subprocess
 from datetime import datetime, timezone
 from zipfile import ZipFile
 
@@ -23,7 +23,6 @@ from flask_login import current_user, login_required
 
 from app.modules.dataset import dataset_bp
 from app.modules.dataset.forms import DataSetForm
-from app.modules.dataset.models import DSDownloadRecord
 from app.modules.dataset.services import (
     AuthorService,
     DataSetService,
@@ -149,29 +148,42 @@ def upload():
         return jsonify({"message": str(e)}), 500
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as fh:
+        with open(file_path, "r", encoding="utf-8") as fh:
             content = fh.read()
     except Exception:
-        content = ''
+        content = ""
 
     keywords = [
-        'graph', 'flowchart', 'sequenceDiagram', 'classDiagram', 'stateDiagram', 'pie',
-        'gantt', 'erDiagram', 'journey', 'gitGraph', 'gitgraph', 'c4', 'mindmap', 'timeline',
-        'sankey', 'radar'
+        "graph",
+        "flowchart",
+        "sequenceDiagram",
+        "classDiagram",
+        "stateDiagram",
+        "pie",
+        "gantt",
+        "erDiagram",
+        "journey",
+        "gitGraph",
+        "gitgraph",
+        "c4",
+        "mindmap",
+        "timeline",
+        "sankey",
+        "radar",
     ]
-    keywords_re = re.compile(r'^(?:' + '|'.join(keywords) + r')\b', re.I)
+    keywords_re = re.compile(r"^(?:" + "|".join(keywords) + r")\b", re.I)
     blocks = []
     current = []
     for line in content.splitlines():
         if keywords_re.match(line.strip()):
             if current:
-                blocks.append('\n'.join(current))
+                blocks.append("\n".join(current))
             current = [line]
         else:
             if current:
                 current.append(line)
     if current:
-        blocks.append('\n'.join(current))
+        blocks.append("\n".join(current))
 
     if not blocks:
         try:
@@ -185,22 +197,21 @@ def upload():
             os.remove(file_path)
         except Exception:
             pass
-        msg = (
-            "Multiple Mermaid diagrams detected in the uploaded file. "
-            "Please upload one diagram per file."
-        )
+        msg = "Multiple Mermaid diagrams detected in the uploaded file. " "Please upload one diagram per file."
         return (jsonify({"message": msg}), 400)
 
     try:
-        mmdc_path = shutil.which('mmdc')
+        mmdc_path = shutil.which("mmdc")
         if mmdc_path:
-            tmp_out = tempfile.NamedTemporaryFile(suffix='.svg', delete=False)
+            tmp_out = tempfile.NamedTemporaryFile(suffix=".svg", delete=False)
             tmp_out.close()
             proc = subprocess.run(
                 [
                     mmdc_path,
-                    '-i', file_path,
-                    '-o', tmp_out.name,
+                    "-i",
+                    file_path,
+                    "-o",
+                    tmp_out.name,
                 ],
                 capture_output=True,
                 text=True,
@@ -211,7 +222,7 @@ def upload():
                     os.remove(file_path)
                 except Exception:
                     pass
-                stderr = proc.stderr.strip() if proc.stderr else 'Unknown mmdc error'
+                stderr = proc.stderr.strip() if proc.stderr else "Unknown mmdc error"
                 try:
                     os.remove(tmp_out.name)
                 except Exception:
@@ -222,7 +233,7 @@ def upload():
             except Exception:
                 pass
     except Exception:
-        logger.exception('Exception while running mmdc validation')
+        logger.exception("Exception while running mmdc validation")
 
     return (
         jsonify(
@@ -291,6 +302,7 @@ def download_dataset(dataset_id):
 
     return resp
 
+
 @dataset_bp.route("/doi/<path:doi>/", methods=["GET"])
 def subdomain_index(doi):
     new_doi = doi_mapping_service.get_new_doi(doi)
@@ -309,7 +321,6 @@ def subdomain_index(doi):
     resp = make_response(render_template("dataset/view_dataset.html", dataset=dataset))
     resp.set_cookie("view_cookie", user_cookie)
     return resp
-
 
 
 @dataset_bp.route("/dataset/unsynchronized/<int:dataset_id>/", methods=["GET"])

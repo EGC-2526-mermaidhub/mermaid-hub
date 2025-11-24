@@ -1,4 +1,5 @@
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -7,8 +8,6 @@ from sqlalchemy import desc, func
 
 from app.modules.dataset.models import Author, DataSet, DOIMapping, DSDownloadRecord, DSMetaData, DSViewRecord
 from core.repositories.BaseRepository import BaseRepository
-
-import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ class DSDownloadRecordRepository(BaseRepository):
 
     def dataset_downloads_id(self, dataset_id: int) -> int:
         count = self.model.query.filter(self.model.dataset_id == dataset_id).count()
-        return count  
+        return count
 
     def register_download(self, dataset_id: int, user_id: int = None, download_cookie: str = None) -> DSDownloadRecord:
 
@@ -43,6 +42,7 @@ class DSDownloadRecordRepository(BaseRepository):
         )
 
         return download_record
+
 
 class DSMetaDataRepository(BaseRepository):
     def __init__(self):

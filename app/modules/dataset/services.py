@@ -6,9 +6,11 @@ import uuid
 from typing import Optional
 
 from flask import request, url_for
+from sqlalchemy import func
 
+from app import db
 from app.modules.auth.services import AuthenticationService
-from app.modules.dataset.models import DataSet, DSMetaData, DSViewRecord
+from app.modules.dataset.models import DataSet, DSDownloadRecord, DSMetaData, DSViewRecord
 from app.modules.dataset.repositories import (
     AuthorRepository,
     DataSetRepository,
@@ -17,17 +19,13 @@ from app.modules.dataset.repositories import (
     DSMetaDataRepository,
     DSViewRecordRepository,
 )
-from app.modules.mermaiddiagram.repositories import MermaidDiagramRepository, MDMetaDataRepository
 from app.modules.hubfile.repositories import (
     HubfileDownloadRecordRepository,
     HubfileRepository,
     HubfileViewRecordRepository,
 )
+from app.modules.mermaiddiagram.repositories import MDMetaDataRepository, MermaidDiagramRepository
 from core.services.BaseService import BaseService
-
-from app import db
-from sqlalchemy import func
-from app.modules.dataset.models import DSDownloadRecord
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +34,8 @@ def calculate_checksum_and_size(file_path):
     file_size = os.path.getsize(file_path)
     with open(file_path, "rb") as file:
         content = file.read()
-        hash_md5 = hashlib.md5(content).hexdigest()
-        return hash_md5, file_size
+        hash_sha256 = hashlib.sha256(content).hexdigest()
+        return hash_sha256, file_size
 
 
 class DataSetService(BaseService):
@@ -82,17 +80,16 @@ class DataSetService(BaseService):
         return datasets
 
     def register_download(self, dataset_id: int, user_id: int = None) -> int:
-        from flask import request
         import uuid
+
+        from flask import request
 
         download_cookie = request.cookies.get("download_cookie")
         if not download_cookie:
             download_cookie = str(uuid.uuid4())
 
         self.dsdownloadrecord_repository.register_download(
-            dataset_id=dataset_id,
-            user_id=user_id,
-            download_cookie=download_cookie
+            dataset_id=dataset_id, user_id=user_id, download_cookie=download_cookie
         )
 
         return self.dataset_downloads_id(dataset_id)
@@ -117,7 +114,7 @@ class DataSetService(BaseService):
         return self.dsdownloadrecord_repository.total_dataset_downloads()
 
     def dataset_downloads_id(self, dataset_id) -> int:
-        return self.dsdownloadrecord_repository.dataset_downloads_id(dataset_id) 
+        return self.dsdownloadrecord_repository.dataset_downloads_id(dataset_id)
 
     def total_dataset_views(self) -> int:
         return self.dsviewrecord_repostory.total_dataset_views()
@@ -144,9 +141,7 @@ class DataSetService(BaseService):
                     author = self.author_repository.create(commit=False, md_meta_data_id=mdmetadata.id, **author_data)
                     mdmetadata.authors.append(author)
 
-                md = self.mermaid_diagram_repository.create(
-                    commit=False, data_set_id=dataset.id, md_meta_data_id=mdmetadata.id
-                )
+                md = self.mermaid_diagram_repository.create(commit=False, data_set_id=dataset.id, md_meta_data_id=mdmetadata.id)
 
                 file_path = os.path.join(current_user.temp_folder(), mmd_filename)
                 checksum, size = calculate_checksum_and_size(file_path)
@@ -168,7 +163,7 @@ class DataSetService(BaseService):
     def get_mermaidhub_doi(self, dataset: DataSet) -> str:
         try:
             # Build an absolute URL using Flask's url_for so it works both locally and when deployed
-            return url_for('dataset.subdomain_index', doi=dataset.ds_meta_data.dataset_doi, _external=True)
+            return url_for("dataset.subdomain_index", doi=dataset.ds_meta_data.dataset_doi, _external=True)
         except Exception:
             # Fallback to DOMAIN env var for contexts where url_for is not available
             domain = os.getenv("DOMAIN", "localhost")
@@ -185,9 +180,7 @@ class DSDownloadRecordService(BaseService):
         super().__init__(DSDownloadRecordRepository())
 
     def get_download_count(self, dataset_id: int) -> int:
-        count = db.session.query(func.count(DSDownloadRecord.id)).filter(
-            DSDownloadRecord.dataset_id == dataset_id
-        ).scalar()
+        count = db.session.query(func.count(DSDownloadRecord.id)).filter(DSDownloadRecord.dataset_id == dataset_id).scalar()
         return count or 0
 
 
