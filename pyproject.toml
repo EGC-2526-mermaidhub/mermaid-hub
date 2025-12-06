@@ -33,7 +33,8 @@ packages = ["rosemary"]
 
 [tool.black]
 line-length = 130
-target-version = ["py313"]
+# Use a supported Black target version for Python 3.12
+target-version = ["py312"]
 
 [tool.isort]
 line_length = 130

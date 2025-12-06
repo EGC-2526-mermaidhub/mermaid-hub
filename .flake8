@@ -1,0 +1,5 @@
+[flake8]
+# Keep max-line-length in sync with project preferences (do NOT enforce Black's 88 here)
+max-line-length = 130
+extend-ignore = E203, W503
+exclude = .venv, venv, env, _venv, migrations, .pytest_cache, build, dist, node_modules
