@@ -1,0 +1,32 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 25.11.0
+    hooks:
+      - id: black
+        name: black
+        language_version: python3
+
+  - repo: https://github.com/pre-commit/mirrors-isort
+    # use main to avoid missing-tag issues; pin to a tag if you prefer reproducibility
+    rev: v5.10.1
+    hooks:
+      - id: isort
+        name: isort
+        language_version: python3
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        name: flake8
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+
+default_stages: [pre-commit]
+
+exclude: |
+  (?x)(^|/)(\.venv|venv|env|_venv|migrations|\.pytest_cache|build|dist|node_modules)(/|$)
