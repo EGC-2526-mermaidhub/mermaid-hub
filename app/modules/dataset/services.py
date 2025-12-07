@@ -169,6 +169,57 @@ class DataSetService(BaseService):
             domain = os.getenv("DOMAIN", "localhost")
             return f"http://{domain}/doi/{dataset.ds_meta_data.dataset_doi}"
 
+    def diagram_similarity(self, ds1, ds2):
+        return 1 if ds1.ds_meta_data.diagram_type == ds2.ds_meta_data.diagram_type else 0
+
+    def tag_similarity(self, ds1, ds2):
+        tags1 = set((ds1.ds_meta_data.tags or "").replace(",", " ").split())
+        tags2 = set((ds2.ds_meta_data.tags or "").replace(",", " ").split())
+        return len(tags1.intersection(tags2))
+
+    def author_similarity(self, ds1, ds2):
+        a1 = {a.name for a in ds1.ds_meta_data.authors}
+        a2 = {a.name for a in ds2.ds_meta_data.authors}
+        return len(a1.intersection(a2))
+
+    def get_popularity(self, dataset_id):
+        views = self.dsviewrecord_repostory.model.query.filter_by(dataset_id=dataset_id).count()
+        downloads = self.dsdownloadrecord_repository.model.query.filter_by(dataset_id=dataset_id).count()
+        return views + downloads
+
+    def recommend_simple(self, dataset_id, top_n=3):
+        datasets = self.repository.model.query.all()
+
+        target = next((ds for ds in datasets if ds.id == dataset_id), None)
+        if not target:
+            return []
+
+        popularity_list = []
+        for ds in datasets:
+            pop = self.get_popularity(ds.id)
+            popularity_list.append(pop)
+
+        max_popularity = max(popularity_list) or 1
+
+        results = []
+
+        for ds, pop in zip(datasets, popularity_list):
+            if ds.id == dataset_id:
+                continue
+
+            diag_sim = self.diagram_similarity(target, ds)
+            tag_sim = self.tag_similarity(target, ds)
+            author_sim = self.author_similarity(target, ds)
+            popularity_score = 0.5 * (pop / max_popularity)
+
+            score = 3 * diag_sim + 1 * tag_sim + 1 * author_sim + popularity_score
+
+            results.append((ds, score))
+
+        results.sort(key=lambda x: x[1], reverse=True)
+
+        return [ds for ds, s in results[:top_n]]
+
 
 class AuthorService(BaseService):
     def __init__(self):
