@@ -354,6 +354,64 @@
   </div>
 </div>
 
+<div class="card mt-4">
+  <div class="card-body">
+    <h3 class="mb-3"><b>Recommended datasets</b></h3>
+    <p class="text-secondary mb-4">Based on similar tags, authors or diagram types</p>
+
+    <div class="row g-3">
+      {% for rec in recommended_datasets %}
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="card h-100 shadow rounded-3 border">
+          
+          <div class="card-header bg-light d-flex align-items-center justify-content-between p-3">
+            
+            <div class="d-flex flex-column me-2">
+              <h6 class="card-title mb-1 text-primary">
+                <a href="{{ url_for('dataset.subdomain_index', doi=rec.ds_meta_data.dataset_doi) }}" class="text-decoration-none fw-bold">
+                  {{ rec.ds_meta_data.title }}
+                </a>
+              </h6>
+              <span class="badge bg-secondary text-wrap" style="width: fit-content; font-size: 0.7rem;">
+                {{ rec.get_cleaned_diagram_type() }}
+              </span>
+            </div>
+
+            {% if rec.ds_meta_data.authors %}
+              {% set first_author = rec.ds_meta_data.authors[0] %}
+              <div class="text-end ms-auto">
+                <small class="text-muted">
+                  {% if first_author.name %}
+                    {{ first_author.name }}
+                  {% else %}
+                    N/A
+                  {% endif %}
+                </small>
+              </div>
+            {% endif %}
+
+          </div>
+
+          <div class="card-footer bg-light p-3">
+            <a href="{{ url_for('dataset.subdomain_index', doi=rec.ds_meta_data.dataset_doi) }}"
+               class="btn btn-outline-primary btn-sm w-100 rounded-pill">
+               View Dataset
+            </a>
+          </div>
+
+        </div>
+      </div>
+      {% endfor %}
+
+      {% if recommended_datasets|length == 0 %}
+      <div class="col-12">
+        <p class="text-muted">No recommendations available.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 <script type="text/javascript" src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
 
 
