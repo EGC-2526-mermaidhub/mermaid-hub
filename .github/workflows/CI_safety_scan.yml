@@ -1,4 +1,4 @@
-name: Safety Scan - Critical & High
+name: Safety scan
 
 on:
   schedule:
