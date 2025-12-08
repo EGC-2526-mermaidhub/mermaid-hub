@@ -4,7 +4,8 @@ import time
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
-
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 from core.environment.host import get_host_for_selenium_testing
 from core.selenium.common import close_driver, initialize_driver
 
@@ -102,6 +103,55 @@ def test_view_uploaded_dataset():
 
         title = driver.find_element(By.CSS_SELECTOR, "h1 b").text
         assert title == "Sample UI"
+
+    finally:
+        close_driver(driver)
+
+
+def test_recommendations_block_is_visible():
+    driver = initialize_driver()
+    try:
+        host = get_host_for_selenium_testing()
+
+        driver.get(f"{host}/login")
+        wait_for_page_to_load(driver)
+        driver.find_element(By.NAME, "email").send_keys("user1@example.com")
+        driver.find_element(By.NAME, "password").send_keys("1234")
+        driver.find_element(By.NAME, "password").send_keys(Keys.RETURN)
+        wait_for_page_to_load(driver)
+        
+        driver.get(f"{host}/dataset/list")
+        wait_for_page_to_load(driver)
+        
+        rows = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
+        if not rows:
+            
+            return 
+                     
+        rows[0].find_element(By.CSS_SELECTOR, "td a").click()
+        wait_for_page_to_load(driver)
+        time.sleep(2)
+        
+        print("[DEBUG] Buscando bloque de recomendaciones...")
+        
+        try:
+            
+            rec_header = WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.XPATH, "//h3[contains(., 'Recommended')]"))
+            )
+            
+            driver.execute_script("arguments[0].scrollIntoView(true);", rec_header)
+            time.sleep(1)
+            
+            assert rec_header.is_displayed(), "El encabezado existe en el DOM pero no es visible."
+            print("[SUCCESS] Bloque encontrado.")
+
+        except TimeoutException:
+            
+            body_text = driver.find_element(By.TAG_NAME, "body").text
+            print(f"[FAIL] Texto en página (fragmento): {body_text[:200]}...")
+            print(f"[FAIL] URL: {driver.current_url}")
+            raise AssertionError("Timeout esperando 'Recommended datasets'.")
 
     finally:
         close_driver(driver)
