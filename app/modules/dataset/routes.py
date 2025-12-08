@@ -9,16 +9,8 @@ import uuid
 from datetime import datetime, timezone
 from zipfile import ZipFile
 
-from flask import (
-    abort,
-    jsonify,
-    make_response,
-    redirect,
-    render_template,
-    request,
-    send_from_directory,
-    url_for,
-)
+import requests
+from flask import abort, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
 from flask_login import current_user, login_required
 
 from app.modules.dataset import dataset_bp
@@ -244,6 +236,153 @@ def upload():
         ),
         200,
     )
+
+
+@dataset_bp.route("/dataset/file/upload_github", methods=["POST"])
+@login_required
+def upload_from_github_repo():
+    """
+    POST JSON or form params:
+        - repo_url: (required) e.g. https://github.com/owner/repo or git@github.com:owner/repo.git
+        - branch: optional, default "main"
+        - path: optional folder path inside repo to search (empty means root)
+        - token: optional GitHub token for private repos
+    This will download all .mmd files from the given path (recursively), save them
+    into current_user.temp_folder() and validate each with `mmdc` like upload().
+    Returns list of saved filenames and any validation errors.
+    """
+    data = request.get_json(silent=True) or request.form or request.values
+    repo_url = data.get("repo_url") or data.get("repo")
+    branch = data.get("branch") or data.get("ref") or "main"
+    subpath = (data.get("path") or "").strip().lstrip("/")
+    token = data.get("token")
+
+    if not repo_url:
+        return jsonify({"message": "repo_url is required"}), 400
+
+    m = re.search(r"(?:git@github\.com:|https?://github\.com/)(?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$", repo_url)
+    if not m:
+        return jsonify({"message": "Invalid GitHub repository URL"}), 400
+    owner = m.group("owner")
+    repo = m.group("repo")
+
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if token:
+        headers["Authorization"] = f"token {token}"
+
+    temp_folder = current_user.temp_folder()
+    if not os.path.exists(temp_folder):
+        os.makedirs(temp_folder)
+
+    session = requests.Session()
+    session.headers.update(headers)
+
+    found_files = []
+    errors = []
+
+    def list_contents(path):
+        api_url = (
+            f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+            if path
+            else f"https://api.github.com/repos/{owner}/{repo}/contents"
+        )
+        resp = session.get(api_url, params={"ref": branch}, timeout=15)
+        if resp.status_code == 404:
+            return []
+        resp.raise_for_status()
+        print(resp.json())
+        return resp.json()
+
+    def walk(path):
+        try:
+            items = list_contents(path)
+        except requests.RequestException as e:
+            logger.exception("GitHub API error")
+            errors.append(f"GitHub API error for path '{path}': {e}")
+            return
+        if isinstance(items, dict):
+            items = [items]
+        for item in items:
+            itype = item.get("type")
+            name = item.get("name") or ""
+            if itype == "dir":
+                walk(item.get("path"))
+            elif itype == "file" and name.lower().endswith(".mmd"):
+                download_url = item.get("download_url")
+                if not download_url:
+                    errors.append(f"No download URL for {item.get('path')}")
+                    continue
+                try:
+                    r = session.get(download_url, timeout=15)
+                    r.raise_for_status()
+                    content = r.content.decode("utf-8")
+                except Exception as e:
+                    logger.exception("Error downloading file from GitHub")
+                    errors.append(f"Failed to download {item.get('path')}: {e}")
+                    continue
+
+                base_name = os.path.basename(name)
+                file_path = os.path.join(temp_folder, base_name)
+                if os.path.exists(file_path):
+                    base, ext = os.path.splitext(base_name)
+                    i = 1
+                    candidate = f"{base} ({i}){ext}"
+                    while os.path.exists(os.path.join(temp_folder, candidate)):
+                        i += 1
+                        candidate = f"{base} ({i}){ext}"
+                    base_name = candidate
+                    file_path = os.path.join(temp_folder, base_name)
+
+                try:
+                    with open(file_path, "w", encoding="utf-8") as fh:
+                        fh.write(content)
+                except Exception as e:
+                    logger.exception("Error saving file")
+                    errors.append(f"Failed to save {item.get('path')}: {e}")
+                    continue
+
+                try:
+                    mmdc_path = shutil.which("mmdc")
+                    if mmdc_path:
+                        tmp_out = tempfile.NamedTemporaryFile(suffix=".svg", delete=False)
+                        tmp_out.close()
+                        proc = subprocess.run(
+                            [mmdc_path, "-i", file_path, "-o", tmp_out.name],
+                            capture_output=True,
+                            text=True,
+                            timeout=10,
+                        )
+                        if proc.returncode != 0:
+                            stderr = proc.stderr.strip() if proc.stderr else "Unknown mmdc error"
+                            try:
+                                os.remove(file_path)
+                            except Exception:
+                                pass
+                            try:
+                                os.remove(tmp_out.name)
+                            except Exception:
+                                pass
+                            errors.append(f"Validation failed for {base_name}: {stderr}")
+                            continue
+                        try:
+                            os.remove(tmp_out.name)
+                        except Exception:
+                            pass
+                except Exception:
+                    logger.exception("Exception while running mmdc validation")
+                    errors.append(f"Validation step error for {base_name}")
+
+                found_files.append(base_name)
+
+    walk(subpath)
+
+    if not found_files:
+        if os.path.exists(temp_folder):
+            pass
+        msg = "No Mermaid (.mmd) files detected in the repository/path or all failed validation"
+        return jsonify({"message": msg, "errors": errors}), 400
+
+    return jsonify({"message": "Files loaded from GitHub", "filenames": found_files, "errors": errors}), 200
 
 
 @dataset_bp.route("/dataset/file/delete", methods=["POST"])
