@@ -32,7 +32,7 @@ jobs:
           safety check -r requirements.txt --full-report > safety-report.txt || true
 
       - name: Upload Safety Report Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: safety-report
           path: safety-report.txt
