@@ -27,7 +27,7 @@ jobs:
           pip install -r requirements.txt
           pip install safety
 
-      - name: Run Safety Scan (HIGH & CRITICAL)
+      - name: Run Safety Scan
         run: |
           safety check -r requirements.txt --full-report > safety-report.txt || true
 
