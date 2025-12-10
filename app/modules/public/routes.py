@@ -2,7 +2,7 @@ import logging
 
 from flask import render_template
 
-from app.modules.dataset.services import DataSetService
+from app.modules.dataset.services import DataSetService, TrendingDatasetsService
 from app.modules.mermaiddiagram.services import MermaidDiagramService
 from app.modules.public import public_bp
 
@@ -14,6 +14,7 @@ def index():
     logger.info("Access index")
     dataset_service = DataSetService()
     mermaid_diagram_service = MermaidDiagramService()
+    trending_datasets_service = TrendingDatasetsService()
 
     # Statistics: total datasets and feature models
     datasets_counter = dataset_service.count_synchronized_datasets()
@@ -27,9 +28,13 @@ def index():
     total_dataset_views = dataset_service.total_dataset_views()
     total_mermaid_diagram_views = mermaid_diagram_service.total_mermaid_diagram_views()
 
+    # Get trending datasets
+    trending_datasets = trending_datasets_service.get_weekly_trending_datasets_metadata(limit=5)
+
     return render_template(
         "public/index.html",
         datasets=dataset_service.latest_synchronized(),
+        trending_datasets=trending_datasets,
         datasets_counter=datasets_counter,
         mermaid_diagrams_counter=mermaid_diagrams_counter,
         total_dataset_downloads=total_dataset_downloads,
