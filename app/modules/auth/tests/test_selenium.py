@@ -1,15 +1,14 @@
 import time
 
 import pytest
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from core.environment.host import get_host_for_selenium_testing
 from core.selenium.common import close_driver, initialize_driver
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
 
 
 def test_login_and_check_element():
@@ -74,9 +73,7 @@ def test_rate_limit_functional_block():
 
         for attempt in range(1, 6):
 
-            WebDriverWait(driver, 5).until(
-               EC.url_contains("/login")
-            )
+            WebDriverWait(driver, 5).until(EC.url_contains("/login"))
 
             email_field = driver.find_element(By.NAME, "email")
             password_field = driver.find_element(By.NAME, "password")
@@ -103,9 +100,7 @@ def test_rate_limit_functional_block():
         driver.find_element(By.ID, "login-submit").click()
 
         try:
-            WebDriverWait(driver, 10).until(
-               EC.presence_of_element_located((By.XPATH, BLOCK_MESSAGE_XPATH))
-            )
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, BLOCK_MESSAGE_XPATH)))
 
             assert EXACT_BLOCK_MESSAGE in driver.page_source, "FAILURE: La frase de bloqueo no coincide en el código fuente."
 

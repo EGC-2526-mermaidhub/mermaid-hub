@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from flask import url_for
 
+from app.modules.dataset.models import DiagramType
 from app.modules.dataset.services import (
     DataSetService,
     DOIMappingService,
@@ -14,7 +15,6 @@ from app.modules.dataset.services import (
     TrendingDatasetsService,
     calculate_checksum_and_size,
 )
-from app.modules.dataset.models import DiagramType
 
 
 @pytest.fixture

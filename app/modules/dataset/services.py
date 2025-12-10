@@ -20,11 +20,7 @@ from app.modules.dataset.repositories import (
     DSViewRecordRepository,
     TrendingDatasetsRepository,
 )
-from app.modules.hubfile.repositories import (
-    HubfileDownloadRecordRepository,
-    HubfileRepository,
-    HubfileViewRecordRepository,
-)
+from app.modules.hubfile.repositories import HubfileDownloadRecordRepository, HubfileRepository, HubfileViewRecordRepository
 from app.modules.mermaiddiagram.repositories import MDMetaDataRepository, MermaidDiagramRepository
 from core.services.BaseService import BaseService
 

@@ -1,11 +1,10 @@
 import pytest
 from flask import url_for
 
+from app.modules.auth.models import User
 from app.modules.auth.repositories import UserRepository
 from app.modules.auth.services import AuthenticationService
 from app.modules.profile.repositories import UserProfileRepository
-
-from app.modules.auth.models import User
 
 
 @pytest.fixture(scope="module")
@@ -14,10 +13,11 @@ def test_client(test_client):
     Extends the test_client fixture to add additional specific data for module testing.
     """
     from app import limiter
+
     limiter.enabled = False
 
-    test_client.application.config['RATELIMIT_ENABLED'] = False
-    test_client.application.config['WTF_CSRF_ENABLED'] = False
+    test_client.application.config["RATELIMIT_ENABLED"] = False
+    test_client.application.config["WTF_CSRF_ENABLED"] = False
 
     with test_client.application.app_context():
 
@@ -26,12 +26,7 @@ def test_client(test_client):
         if not existing_user:
 
             auth_service = AuthenticationService()
-            auth_service.create_with_profile(
-                email="test@example.com",
-                password="test1234",
-                name="John",
-                surname="Doe"
-            )
+            auth_service.create_with_profile(email="test@example.com", password="test1234", name="John", surname="Doe")
 
     yield test_client
 
