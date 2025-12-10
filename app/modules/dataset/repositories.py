@@ -1,7 +1,7 @@
 import logging
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional
 
 from flask_login import current_user
 from sqlalchemy import desc, func
@@ -83,7 +83,7 @@ class DataSetRepository(BaseRepository):
     def get_synchronized(self, current_user_id: int) -> DataSet:
         return (
             self.model.query.join(DSMetaData)
-            .filter(DataSet.user_id == current_user_id, DSMetaData.dataset_doi.isnot(None))
+            .filter(DataSet.user_id == current_user_id, DSMetaData.is_draft == 0)
             .order_by(self.model.created_at.desc())
             .all()
         )
@@ -91,7 +91,7 @@ class DataSetRepository(BaseRepository):
     def get_unsynchronized(self, current_user_id: int) -> DataSet:
         return (
             self.model.query.join(DSMetaData)
-            .filter(DataSet.user_id == current_user_id, DSMetaData.dataset_doi.is_(None))
+            .filter(DataSet.user_id == current_user_id, DSMetaData.is_draft == 1)
             .order_by(self.model.created_at.desc())
             .all()
         )
@@ -99,24 +99,18 @@ class DataSetRepository(BaseRepository):
     def get_unsynchronized_dataset(self, current_user_id: int, dataset_id: int) -> DataSet:
         return (
             self.model.query.join(DSMetaData)
-            .filter(DataSet.user_id == current_user_id, DataSet.id == dataset_id, DSMetaData.dataset_doi.is_(None))
+            .filter(DataSet.user_id == current_user_id, DataSet.id == dataset_id, DSMetaData.is_draft == 1)
             .first()
         )
 
     def count_synchronized_datasets(self):
-        return self.model.query.join(DSMetaData).filter(DSMetaData.dataset_doi.isnot(None)).count()
+        return self.model.query.join(DSMetaData).filter(DSMetaData.is_draft == 0).count()
 
     def count_unsynchronized_datasets(self):
-        return self.model.query.join(DSMetaData).filter(DSMetaData.dataset_doi.is_(None)).count()
+        return self.model.query.join(DSMetaData).filter(DSMetaData.is_draft == 1).count()
 
     def latest_synchronized(self):
-        return (
-            self.model.query.join(DSMetaData)
-            .filter(DSMetaData.dataset_doi.isnot(None))
-            .order_by(desc(self.model.id))
-            .limit(5)
-            .all()
-        )
+        return self.model.query.join(DSMetaData).filter(DSMetaData.is_draft == 0).order_by(desc(self.model.id)).limit(5).all()
 
 
 class DOIMappingRepository(BaseRepository):
@@ -125,3 +119,52 @@ class DOIMappingRepository(BaseRepository):
 
     def get_new_doi(self, old_doi: str) -> str:
         return self.model.query.filter_by(dataset_doi_old=old_doi).first()
+
+
+class TrendingDatasetsRepository(BaseRepository):
+    def __init__(self):
+        super().__init__(DataSet)
+
+    def get_top_downloaded_datasets(self, limit: int = 10, period_days: int = 7) -> List[tuple]:
+        start_date = datetime.now(timezone.utc) - timedelta(days=period_days)
+
+        results = (
+            self.model.query.join(DSMetaData, DataSet.ds_meta_data_id == DSMetaData.id)
+            .join(DSDownloadRecord, DataSet.id == DSDownloadRecord.dataset_id)
+            .filter(
+                DSMetaData.dataset_doi.isnot(None),  # Only synchronized datasets
+                DSDownloadRecord.download_date >= start_date,  # Downloads within period
+            )
+            .with_entities(DataSet, func.count(DSDownloadRecord.id).label("download_count"))
+            .group_by(DataSet.id)
+            .order_by(desc("download_count"))
+            .limit(limit)
+            .all()
+        )
+
+        return results
+
+    def get_top_downloaded_datasets_metadata(self, limit: int = 10, period_days: int = 7) -> List[dict]:
+        results = self.get_top_downloaded_datasets(limit=limit, period_days=period_days)
+
+        trending_datasets = []
+        for dataset, download_count in results:
+            trending_datasets.append(
+                {
+                    "id": dataset.id,
+                    "title": dataset.ds_meta_data.title,
+                    "description": dataset.ds_meta_data.description,
+                    "diagram_type": dataset.get_cleaned_diagram_type(),
+                    "dataset_doi": dataset.ds_meta_data.dataset_doi,
+                    "publication_doi": dataset.ds_meta_data.publication_doi,
+                    "tags": dataset.ds_meta_data.tags,
+                    "created_at": dataset.created_at,
+                    "download_count": download_count,
+                    "user_id": dataset.user_id,
+                    "files_count": dataset.get_files_count(),
+                    "total_size": dataset.get_file_total_size(),
+                    "total_size_human": dataset.get_file_total_size_for_human(),
+                }
+            )
+
+        return trending_datasets

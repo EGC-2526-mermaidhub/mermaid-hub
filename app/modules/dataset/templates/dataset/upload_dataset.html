@@ -88,7 +88,47 @@
                                 </div>
                             </div>
 
-                        </div>
+                        </div> <div class="row" style="padding-left: 2rem">
+                            <div class="col-12">
+                                <label class="form-label"><b>Save as draft?</b></label>
+                                <div class="btn-group" role="group" aria-label="Draft toggle">
+                                    <input type="radio" class="btn-check" name="is_draft_option" id="draft_yes" value="true" autocomplete="off">
+                                    <label class="btn btn-outline-primary" for="draft_yes">Yes</label>
+
+                                    <input type="radio" class="btn-check" name="is_draft_option" id="draft_no" value="false" autocomplete="off" checked>
+                                    <label class="btn btn-outline-primary" for="draft_no">No</label>
+                                </div>
+
+                                <input type="hidden" name="is_draft" id="is_draft_hidden" value="false">
+
+                                <small class="form-text text-muted">
+                                    If set to <b>Yes</b>, the dataset will NOT be uploaded to Zenodo and will stay in draft mode.
+                                </small>
+                            </div>
+                        </div> <script>
+                                const draftYes = document.getElementById("draft_yes");
+                                const draftNo = document.getElementById("draft_no");
+                                const zenodoCheckbox = document.getElementById("agreeCheckbox");
+                                const uploadBtn = document.getElementById("upload_button");
+                                const isDraftHidden = document.getElementById("is_draft_hidden");
+
+                                isDraftHidden.value = "false";
+
+                                draftYes.addEventListener("change", function () {
+                                    isDraftHidden.value = "true";
+
+                                    zenodoCheckbox.checked = false;
+                                    zenodoCheckbox.disabled = true;
+                                    uploadBtn.disabled = false;
+                                });
+
+                                draftNo.addEventListener("change", function () {
+                                    isDraftHidden.value = "false";
+
+                                    zenodoCheckbox.disabled = false;
+                                    uploadBtn.disabled = !zenodoCheckbox.checked;
+                                });
+                            </script>
 
                         <h1 class="h3 mb-3 mt-4">
                           Authors
@@ -201,7 +241,7 @@
                 </div>
 
 
-            </div>
+            </form> </div>
         </div>
 
         <div class="col-xl-6 col-lg-12 col-md-12 col-sm-12">
@@ -210,180 +250,446 @@
 
             <div id="uploaded_models_form" style="padding-left: 2rem">
 
-                <form action="{{ url_for('dataset.upload') }}" class="dropzone" id="myDropzone">
-                    <div id="dropzone-text"></div>
-                </form>
+                <div class="dropdown mb-2 d-inline-block">
+                    <button type="button" class="btn btn-outline-primary dropdown-toggle" id="githubImportDropdown" aria-haspopup="true" aria-expanded="false">
+                         Import from GitHub
+                     </button>
+                     <div class="dropdown-menu p-3" aria-labelledby="githubImportDropdown" style="min-width: 320px;">
+                         <form id="githubImportForm" class="github-import-form">
+                            <div class="form-group">
+                                <label for="github_repo">Repository URL</label>
+                                <input type="text" class="form-control" id="github_repo" name="repo_url" placeholder="https://github.com/owner/repo.git" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="github_branch">Branch (optional)</label>
+                                <input type="text" class="form-control" id="github_branch" name="branch" placeholder="main">
+                            </div>
+                            <div class="form-group">
+                                <label for="github_path">Path inside repo (optional)</label>
+                                <input type="text" class="form-control" id="github_path" name="path" placeholder="folder/subfolder">
+                            </div>
+                            <div class="form-group">
+                                <label for="github_token">GitHub token (optional)</label>
+                                <input type="password" class="form-control" id="github_token" name="token" placeholder="token for private repos">
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <button type="submit" class="btn btn-sm btn-primary">Load files</button>
+                                <!-- Add id so we can close the dropdown with vanilla JS -->
+                                <button type="button" class="btn btn-sm btn-secondary" id="githubImportClose">Close</button>
+                            </div>
+                         </form>
+                     </div>
+                 </div>
 
-                <span class="text-danger" id="alerts" style="display: none">
-                    </span>
+                 <form action="{{ url_for('dataset.upload') }}" class="dropzone" id="myDropzone">
+                     <div id="dropzone-text"></div>
+                 </form>
 
-                <ul class="mt-2" id="file-list"></ul>
+                 <span class="text-danger" id="alerts" style="display: none">
+                     </span>
 
-                <script>
+                 <ul class="mt-2" id="file-list"></ul>
 
-                    // Load mermaid if needed and provide callbacks
-                    function ensureMermaidLoaded(callback) {
-                        if (window.mermaid) return callback(null);
-                        const s = document.createElement('script');
-                        s.src = 'https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js';
-                        s.onload = function () {
-                            try {
-                                if (window.mermaid && mermaid.initialize) {
-                                    mermaid.initialize({ startOnLoad: false });
-                                }
-                            } catch (e) {
-                            }
-                            callback(null);
-                        };
-                        s.onerror = function () {
-                            callback(new Error('Could not load mermaid library'));
-                        };
-                        document.head.appendChild(s);
-                    }
+                 <script>
 
-                    function validateMermaidText(text) {
-                        try {
-                            if (window.mermaid && mermaid.parse) {
-                                mermaid.parse(text);
-                                return null;
-                            }
-                            return null;
-                        } catch (err) {
-                            return err && err.message ? err.message : String(err);
+                    // Simple dropdown controller (works without Bootstrap JS/jQuery)
+                    (function () {
+                        const toggleBtn = document.getElementById('githubImportDropdown');
+                        if (!toggleBtn) return;
+                        const menu = toggleBtn.nextElementSibling;
+                        toggleBtn.addEventListener('click', function (ev) {
+                            ev.stopPropagation();
+                            menu.classList.toggle('show');
+                            const expanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+                            toggleBtn.setAttribute('aria-expanded', String(!expanded));
+                        });
+                        const closeBtn = document.getElementById('githubImportClose');
+                        if (closeBtn) {
+                            closeBtn.addEventListener('click', function (ev) {
+                                ev.preventDefault();
+                                menu.classList.remove('show');
+                                toggleBtn.setAttribute('aria-expanded', 'false');
+                            });
                         }
+                        document.addEventListener('click', function (ev) {
+                            if (!menu.classList.contains('show')) return;
+                            if (!menu.contains(ev.target) && ev.target !== toggleBtn) {
+                                menu.classList.remove('show');
+                                toggleBtn.setAttribute('aria-expanded', 'false');
+                            }
+                        });
+                    })();
+
+                    if (!window._gh_file_counter) window._gh_file_counter = 0;
+                    function _localGenerateIncrementalId() {
+                        if (typeof generateIncrementalId === 'function') {
+                            try { return generateIncrementalId(); } catch (e) {}
+                        }
+                        window._gh_file_counter += 1;
+                        return window._gh_file_counter;
                     }
 
-                    function extractMermaidBlocks(text) {
-                        const lines = text.split(/\r?\n/);
-                        const keywords = [
-                            'graph', 'flowchart', 'sequenceDiagram', 'classDiagram', 'stateDiagram', 'pie', 'gantt',
-                            'erDiagram', 'journey', 'gitGraph', 'gitgraph', 'c4', 'mindmap', 'timeline', 'sankey', 'radar'
-                        ];
-                        const blocks = [];
-                        let current = null;
+                    function addUploadedFile(filename) {
+                        try { show_upload_dataset(); } catch (e) {}
 
-                        const isStart = (line) => {
-                            if (!line) return false;
-                            const l = line.trim();
-                            for (const kw of keywords) {
-                                const re = new RegExp('^' + kw + '\\b', 'i');
-                                if (re.test(l)) return true;
-                            }
-                            return false;
-                        };
+                        let fileList = document.getElementById('file-list');
+                        let listItem = document.createElement('li');
+                        let h4Element = document.createElement('h4');
+                        h4Element.textContent = filename;
+                        listItem.appendChild(h4Element);
 
-                        for (const line of lines) {
-                            if (isStart(line)) {
-                                if (current !== null) {
-                                    blocks.push(current.join('\n'));
-                                }
-                                current = [line];
+                        let formUniqueId = _localGenerateIncrementalId();
+
+                        // FORM BUTTON
+                        let formButton = document.createElement('button');
+                        formButton.innerHTML = 'Show info';
+                        formButton.classList.add('info-button', 'btn', 'btn-outline-secondary', 'btn-sm');
+                        formButton.style.borderRadius = '5px';
+                        formButton.id = formUniqueId + "_button";
+
+                        // CONTAINER
+                        let formContainer = document.createElement('div');
+                        formContainer.id = formUniqueId + "_form";
+                        formContainer.classList.add('uvl_form', 'mt-3');
+                        formContainer.style.display = "none";
+
+                        formButton.addEventListener('click', function () {
+                            if (formContainer.style.display === "none") {
+                                formContainer.style.display = "block";
+                                formButton.innerHTML = 'Hide info';
                             } else {
-                                if (current !== null) current.push(line);
+                                formContainer.style.display = "none";
+                                formButton.innerHTML = 'Add info';
                             }
-                        }
-                        if (current !== null) blocks.push(current.join('\n'));
-                        return blocks;
+                        });
+
+                        // REMOVE BUTTON
+                        let removeButton = document.createElement('button');
+                        removeButton.innerHTML = 'Delete model';
+                        removeButton.classList.add('btn', 'btn-outline-danger', 'btn-sm', 'remove-button');
+                        removeButton.style.borderRadius = '5px';
+
+                        removeButton.addEventListener('click', function () {
+                            if (fileList.contains(listItem)) fileList.removeChild(listItem);
+
+                            let xhr = new XMLHttpRequest();
+                            xhr.open('POST', '/dataset/file/delete', true);
+                            xhr.setRequestHeader('Content-Type', 'application/json');
+                            xhr.onload = function () {
+                                if (xhr.status === 200) {
+                                    console.log('Deleted file from server');
+                                    if (!document.getElementById('file-list').children.length) {
+                                        try { document.getElementById("upload_dataset").style.display = "none"; } catch (e) {}
+                                        try { clean_upload_errors(); } catch (e) {}
+                                    }
+                                }
+                            };
+                            xhr.send(JSON.stringify({file: filename}));
+                        });
+
+                        formContainer.innerHTML = `
+                            <div class="row">
+                                <input type="hidden" value="${filename}" name="mermaid_diagrams-${formUniqueId}-mmd_filename">
+                                <div class="col-12">
+                                    <div class="row">
+                                        <div class="col-12">
+                                            <div class="mb-3">
+                                                <label class="form-label">Title</label>
+                                                <input type="text" class="form-control" name="mermaid_diagrams-${formUniqueId}-title">
+                                            </div>
+                                        </div>
+                                        <div class="col-12">
+                                            <div class="mb-3">
+                                                <label class="form-label">Description</label>
+                                                <textarea rows="4" class="form-control" name="mermaid_diagrams-${formUniqueId}-desc"></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-6 col-12">
+                                            <div class="mb-3">
+                                                <label class="form-label" for="diagram_type">Diagram type</label>
+                                                <select class="form-control" name="mermaid_diagrams-${formUniqueId}-diagram_type">
+                                                    <option value="NONE">None</option>
+                                                    <option value="FLOWCHART">Flowchart</option>
+                                                    <option value="SEQUENCE_DIAGRAM">Sequence diagram</option>
+                                                    <option value="CLASS_DIAGRAM">Class diagram</option>
+                                                    <option value="STATE_DIAGRAM">State diagram</option>
+                                                    <option value="ENTITY_RELATIONSHIP_DIAGRAM">Entity-relationship diagram</option>
+                                                    <option value="USER_JOURNEY">User journey</option>
+                                                    <option value="GANTT">Gantt</option>
+                                                    <option value="PIE_CHART">Pie chart</option>
+                                                    <option value="QUADRANT_CHART">Quadrant chart</option>
+                                                    <option value="REQUIREMENT_DIAGRAM">Requirement diagram</option>
+                                                    <option value="GITGRAPH_DIAGRAM">Gitgraph diagram</option>
+                                                    <option value="C4_DIAGRAM">C4 diagram</option>
+                                                    <option value="MINDMAPS">Mindmaps</option>
+                                                    <option value="TIMELINE">Timeline</option>
+                                                    <option value="ZENUML">ZenUML</option>
+                                                    <option value="SANKEY">Sankey</option>
+                                                    <option value="XYCHART">XY chart</option>
+                                                    <option value="BLOCKDIAGRAM">Block diagram</option>
+                                                    <option value="PACKET">Packet</option>
+                                                    <option value="KANBAN">Kanban</option>
+                                                    <option value="ARCHITECTURE">Architecture</option>
+                                                    <option value="RADAR">Radar</option>
+                                                    <option value="TREEMAP">Treemap</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">Tags (separated by commas)</label>
+                                                <input type="text" class="form-control" name="mermaid_diagrams-${formUniqueId}-tags">
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">Mermaid version</label>
+                                                <input type="text" class="form-control" name="mermaid_diagrams-${formUniqueId}-version">
+                                            </div>
+                                        </div>
+                                        <div class="col-12">
+                                            <div class="mb-3">
+                                                <label class="form-label">Authors</label>
+                                                <div id="${formContainer.id}_authors"></div>
+                                                <button type="button" class="add_author_to_uvl btn btn-secondary" id="${formContainer.id}_authors_button">Add author</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+
+                        listItem.appendChild(formButton);
+                        listItem.appendChild(removeButton);
+                        listItem.appendChild(formContainer);
+                        fileList.appendChild(listItem);
                     }
 
-                    let dropzone = Dropzone.options.myDropzone = {
-                        url: "/dataset/file/upload",
-                        paramName: 'file',
-                        maxFilesize: 10,
-                        acceptedFiles: '.mmd',
-                        accept: function(file, done) {
-                            const alerts = document.getElementById('alerts');
-                            const ext = file.name.split('.').pop();
-                            if (ext !== 'mmd') {
-                                const msg = 'Invalid file extension: ' + file.name + ' (use .mmd)';
-                                let alert = document.createElement('p');
-                                alert.textContent = msg;
-                                alerts.appendChild(alert);
+                    document.getElementById('githubImportForm').addEventListener('submit', function (ev) {
+                        ev.preventDefault();
+                        const repo = document.getElementById('github_repo').value.trim();
+                        const branch = document.getElementById('github_branch').value.trim() || 'main';
+                        const path = document.getElementById('github_path').value.trim();
+                        const token = document.getElementById('github_token').value;
+
+                        const alerts = document.getElementById('alerts');
+                        alerts.innerHTML = '';
+                        alerts.style.display = 'none';
+
+                        if (!repo) {
+                            alerts.textContent = 'Repository URL is required';
+                            alerts.style.display = 'block';
+                            return;
+                        }
+
+                        const submitBtn = this.querySelector('button[type="submit"]');
+                        submitBtn.disabled = true;
+                        const payload = { repo_url: repo, branch: branch, path: path, token: token };
+
+                        fetch('/dataset/file/upload_github', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload),
+                        }).then(async (resp) => {
+                            submitBtn.disabled = false;
+                            if (!resp.ok) {
+                                const data = await resp.json().catch(() => ({}));
+                                const msg = data.message || 'Error loading files from GitHub';
+                                alerts.textContent = msg;
+                                if (Array.isArray(data.errors) && data.errors.length) {
+                                    const ul = document.createElement('ul');
+                                    data.errors.forEach(e => { let li = document.createElement('li'); li.textContent = e; ul.appendChild(li); });
+                                    alerts.appendChild(ul);
+                                }
                                 alerts.style.display = 'block';
-                                done(msg);
-                                const dz = this;
-                                setTimeout(() => dz.removeFile(file), 10);
                                 return;
                             }
+                            const data = await resp.json();
 
-                            const reader = new FileReader();
-                            reader.onload = (e) => {
-                                const content = e.target.result;
-                                ensureMermaidLoaded((loadErr) => {
-                                    if (loadErr) {
-                                        console.warn('mermaid validation skipped:', loadErr);
-                                        done();
-                                        return;
-                                    }
-                                    const blocks = extractMermaidBlocks(content);
-                                    if (!blocks || blocks.length === 0) {
-                                        const msg = 'No Mermaid diagram detected in ' + file.name;
-                                        let alert = document.createElement('p');
-                                        alert.textContent = msg;
-                                        alerts.appendChild(alert);
-                                        alerts.style.display = 'block';
-                                        done(msg);
-                                        setTimeout(() => this.removeFile(file), 10);
-                                        return;
-                                    }
-                                    if (blocks.length > 1) {
-                                        const msg = 'Multiple Mermaid diagrams detected in ' + file.name + '. Please upload one diagram per file.';
-                                        let alert = document.createElement('p');
-                                        alert.textContent = msg;
-                                        alerts.appendChild(alert);
-                                        alerts.style.display = 'block';
-                                        done(msg);
-                                        setTimeout(() => this.removeFile(file), 10);
-                                        return;
-                                    }
-                                    const errMsg = validateMermaidText(blocks[0]);
-                                    if (errMsg) {
-                                        const msg = 'Mermaid syntax error in ' + file.name + ': ' + errMsg;
-                                        let alert = document.createElement('p');
-                                        alert.textContent = msg;
-                                        alerts.appendChild(alert);
-                                        alerts.style.display = 'block';
-                                        done(msg);
-                                        setTimeout(() => this.removeFile(file), 10);
-                                        return;
-                                    }
-                                    done();
+                            if (Array.isArray(data.errors) && data.errors.length) {
+                                data.errors.forEach(e => {
+                                    let p = document.createElement('p');
+                                    p.textContent = e;
+                                    alerts.appendChild(p);
                                 });
-                            };
-                            reader.onerror = () => {
-                                const msg = 'Could not read file ' + file.name;
-                                let alert = document.createElement('p');
-                                alert.textContent = msg;
-                                alerts.appendChild(alert);
                                 alerts.style.display = 'block';
-                                done(msg);
-                                setTimeout(() => this.removeFile(file), 10);
-                            };
-                            reader.readAsText(file);
-                        },
+                            }
 
-                        init: function () {
+                            if (Array.isArray(data.filenames)) {
+                                data.filenames.forEach(fn => addUploadedFile(fn));
+                            }
+                            try {
+                                const toggleBtn = document.getElementById('githubImportDropdown');
+                                const menu = toggleBtn && toggleBtn.nextElementSibling;
+                                if (menu) menu.classList.remove('show');
+                                if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+                            } catch (e) {}
+                        }).catch((err) => {
+                            submitBtn.disabled = false;
+                            alerts.textContent = 'Error contacting server: ' + err;
+                            alerts.style.display = 'block';
+                        });
+                    });
 
-                            let fileList = document.getElementById('file-list');
-                            let dropzoneText = document.getElementById('dropzone-text');
-                            let alerts = document.getElementById('alerts');
+                     function ensureMermaidLoaded(callback) {
+                         if (window.mermaid) return callback(null);
+                         const s = document.createElement('script');
+                         s.src = 'https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js';
+                         s.onload = function () {
+                             try {
+                                 if (window.mermaid && mermaid.initialize) {
+                                     mermaid.initialize({ startOnLoad: false });
+                                 }
+                             } catch (e) {
+                             }
+                             callback(null);
+                         };
+                         s.onerror = function () {
+                             callback(new Error('Could not load mermaid library'));
+                         };
+                         document.head.appendChild(s);
+                     }
 
-                            // 'addedfile' handled by Dropzone accept hook; no-op here
+                     function validateMermaidText(text) {
+                         try {
+                             if (window.mermaid && mermaid.parse) {
+                                 mermaid.parse(text);
+                                 return null;
+                             }
+                             return null;
+                         } catch (err) {
+                             return err && err.message ? err.message : String(err);
+                         }
+                     }
 
-                            this.on('success', function (file, response) {
+                     function extractMermaidBlocks(text) {
+                         const lines = text.split(/\r?\n/);
+                         const keywords = [
+                             'graph', 'flowchart', 'sequenceDiagram', 'classDiagram', 'stateDiagram', 'pie', 'gantt',
+                             'erDiagram', 'journey', 'gitGraph', 'gitgraph', 'c4', 'mindmap', 'timeline', 'sankey', 'radar'
+                         ];
+                         const blocks = [];
+                         let current = null;
+
+                         const isStart = (line) => {
+                             if (!line) return false;
+                             const l = line.trim();
+                             for (const kw of keywords) {
+                                 const re = new RegExp('^' + kw + '\\b', 'i');
+                                 if (re.test(l)) return true;
+                             }
+                             return false;
+                         };
+
+                         for (const line of lines) {
+                             if (isStart(line)) {
+                                 if (current !== null) {
+                                     blocks.push(current.join('\n'));
+                                 }
+                                 current = [line];
+                             } else {
+                                 if (current !== null) current.push(line);
+                             }
+                         }
+                         if (current !== null) blocks.push(current.join('\n'));
+                         return blocks;
+                     }
+
+                     let dropzone = Dropzone.options.myDropzone = {
+                         url: "/dataset/file/upload",
+                         paramName: 'file',
+                         maxFilesize: 10,
+                         acceptedFiles: '.mmd',
+                         accept: function(file, done) {
+                             const alerts = document.getElementById('alerts');
+                             const ext = file.name.split('.').pop();
+                             if (ext !== 'mmd') {
+                                 const msg = 'Invalid file extension: ' + file.name + ' (use .mmd)';
+                                 let alert = document.createElement('p');
+                                 alert.textContent = msg;
+                                 alerts.appendChild(alert);
+                                 alerts.style.display = 'block';
+                                 done(msg);
+                                 const dz = this;
+                                 setTimeout(() => dz.removeFile(file), 10);
+                                 return;
+                             }
+
+                             const reader = new FileReader();
+                             reader.onload = (e) => {
+                                 const content = e.target.result;
+                                 ensureMermaidLoaded((loadErr) => {
+                                     if (loadErr) {
+                                         console.warn('mermaid validation skipped:', loadErr);
+                                         done();
+                                         return;
+                                     }
+                                     const blocks = extractMermaidBlocks(content);
+                                     if (!blocks || blocks.length === 0) {
+                                         const msg = 'No Mermaid diagram detected in ' + file.name;
+                                         let alert = document.createElement('p');
+                                         alert.textContent = msg;
+                                         alerts.appendChild(alert);
+                                         alerts.style.display = 'block';
+                                         done(msg);
+                                         setTimeout(() => this.removeFile(file), 10);
+                                         return;
+                                     }
+                                     if (blocks.length > 1) {
+                                         const msg = 'Multiple Mermaid diagrams detected in ' + file.name + '. Please upload one diagram per file.';
+                                         let alert = document.createElement('p');
+                                         alert.textContent = msg;
+                                         alerts.appendChild(alert);
+                                         alerts.style.display = 'block';
+                                         done(msg);
+                                         setTimeout(() => this.removeFile(file), 10);
+                                         return;
+                                     }
+                                     const errMsg = validateMermaidText(blocks[0]);
+                                     if (errMsg) {
+                                         const msg = 'Mermaid syntax error in ' + file.name + ': ' + errMsg;
+                                         let alert = document.createElement('p');
+                                         alert.textContent = msg;
+                                         alerts.appendChild(alert);
+                                         alerts.style.display = 'block';
+                                         done(msg);
+                                         setTimeout(() => this.removeFile(file), 10);
+                                         return;
+                                     }
+                                     done();
+                                 });
+                             };
+                             reader.onerror = () => {
+                                 const msg = 'Could not read file ' + file.name;
+                                 let alert = document.createElement('p');
+                                 alert.textContent = msg;
+                                 alerts.appendChild(alert);
+                                 alerts.style.display = 'block';
+                                 done(msg);
+                                 setTimeout(() => this.removeFile(file), 10);
+                             };
+                             reader.readAsText(file);
+                         },
+
+                         init: function () {
+
+                             let fileList = document.getElementById('file-list');
+                             let dropzoneText = document.getElementById('dropzone-text');
+                             let alerts = document.getElementById('alerts');
+
+
+                             this.on('success', function (file, response) {
 
                                 let dropzone = this;
 
                                 show_upload_dataset();
 
                                 console.log("File uploaded: ", response);
-                                // actions when Mermaid model is uploaded
                                 let listItem = document.createElement('li');
                                 let h4Element = document.createElement('h4');
                                 h4Element.textContent = response.filename;
                                 listItem.appendChild(h4Element);
 
-                                // generate incremental id for form
                                 let formUniqueId = generateIncrementalId();
 
                                 /*
@@ -626,16 +932,20 @@
                     const checkbox = document.getElementById('agreeCheckbox');
                     const upload_button = document.getElementById('upload_button');
 
+                    const mainForm = document.querySelector('#basic_info_form').closest('form');
+
                     checkbox.addEventListener('change', function () {
                         upload_button.disabled = !checkbox.checked;
+                    });
+
+                    upload_button.addEventListener('click', function() {
+                        if (mainForm) {
+                            mainForm.submit();
+                        }
                     });
                 </script>
 
             </div>
-
-
-
-
         </div>
 
     </div>

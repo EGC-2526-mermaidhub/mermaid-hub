@@ -79,6 +79,7 @@ packaging==25.0
 pathspec==0.12.1
 pillow==11.3.0
 platformdirs==4.3.8
+pre-commit==4.5.0
 pluggy==1.6.0
 ply==3.10
 psutil==7.0.0
@@ -94,6 +95,7 @@ pyparsing==3.2.3
 PySocks==1.7.1
 pytest==8.4.1
 pytest-cov==6.2.1
+pytest-ordering==0.6
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
 python-engineio==4.12.2
