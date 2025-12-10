@@ -18,6 +18,7 @@ from app.modules.dataset.repositories import (
     DSDownloadRecordRepository,
     DSMetaDataRepository,
     DSViewRecordRepository,
+    TrendingDatasetsRepository,
 )
 from app.modules.hubfile.repositories import (
     HubfileDownloadRecordRepository,
@@ -294,5 +295,39 @@ class SizeService:
             return f"{round(size / 1024, 2)} KB"
         elif size < 1024**3:
             return f"{round(size / (1024 ** 2), 2)} MB"
+
         else:
             return f"{round(size / (1024 ** 3), 2)} GB"
+
+
+class TrendingDatasetsService(BaseService):
+    def __init__(self):
+        super().__init__(TrendingDatasetsRepository())
+
+    def get_trending_datasets(self, limit: int = 10, period: str = "week") -> list:
+        period_days = self._get_period_days(period)
+        return self.repository.get_top_downloaded_datasets(limit=limit, period_days=period_days)
+
+    def get_trending_datasets_metadata(self, limit: int = 10, period: str = "week") -> list:
+        period_days = self._get_period_days(period)
+        return self.repository.get_top_downloaded_datasets_metadata(limit=limit, period_days=period_days)
+
+    def get_weekly_trending_datasets(self, limit: int = 10) -> list:
+        return self.get_trending_datasets(limit=limit, period="week")
+
+    def get_monthly_trending_datasets(self, limit: int = 10) -> list:
+        return self.get_trending_datasets(limit=limit, period="month")
+
+    def get_weekly_trending_datasets_metadata(self, limit: int = 10) -> list:
+        return self.get_trending_datasets_metadata(limit=limit, period="week")
+
+    def get_monthly_trending_datasets_metadata(self, limit: int = 10) -> list:
+        return self.get_trending_datasets_metadata(limit=limit, period="month")
+
+    def _get_period_days(self, period: str) -> int:
+        period_mapping = {"week": 7, "month": 30}
+
+        if period not in period_mapping:
+            raise ValueError(f"Invalid period '{period}'. Must be 'week' or 'month'.")
+
+        return period_mapping[period]
