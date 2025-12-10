@@ -170,38 +170,29 @@ def edit_dataset(dataset_id):
 @dataset_bp.route("/dataset/file/upload", methods=["POST"])
 @login_required
 def upload():
+    """Upload a single .mmd file or a .zip file containing multiple .mmd files.
+
+    For .mmd files: validates and saves directly.
+    For .zip files: extracts, validates each .mmd, saves accepted files, returns
+                    list of accepted filenames and rejected files with reasons.
+    """
     file = request.files["file"]
     temp_folder = current_user.temp_folder()
 
-    if not file or not file.filename.endswith(".mmd"):
+    if not file or not file.filename:
         return jsonify({"message": "No valid file"}), 400
 
     if not os.path.exists(temp_folder):
         os.makedirs(temp_folder)
 
-    file_path = os.path.join(temp_folder, file.filename)
+    # Determine file type
+    is_zip = file.filename.lower().endswith(".zip")
+    is_mmd = file.filename.lower().endswith(".mmd")
 
-    if os.path.exists(file_path):
-        base_name, extension = os.path.splitext(file.filename)
-        i = 1
-        while os.path.exists(os.path.join(temp_folder, f"{base_name} ({i}){extension}")):
-            i += 1
-        new_filename = f"{base_name} ({i}){extension}"
-        file_path = os.path.join(temp_folder, new_filename)
-    else:
-        new_filename = file.filename
+    if not is_zip and not is_mmd:
+        return jsonify({"message": "No valid file (must be .mmd or .zip)"}), 400
 
-    try:
-        file.save(file_path)
-    except Exception as e:
-        return jsonify({"message": str(e)}), 500
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as fh:
-            content = fh.read()
-    except Exception:
-        content = ""
-
+    # Keywords for mermaid diagram detection
     keywords = [
         "graph",
         "flowchart",
@@ -221,78 +212,203 @@ def upload():
         "radar",
     ]
     keywords_re = re.compile(r"^(?:" + "|".join(keywords) + r")\b", re.I)
-    blocks = []
-    current = []
-    for line in content.splitlines():
-        if keywords_re.match(line.strip()):
-            if current:
-                blocks.append("\n".join(current))
-            current = [line]
-        else:
-            if current:
-                current.append(line)
-    if current:
-        blocks.append("\n".join(current))
 
-    if not blocks:
-        try:
-            os.remove(file_path)
-        except Exception:
-            pass
-        return jsonify({"message": "No Mermaid diagram detected in the uploaded file"}), 400
+    def validate_mermaid_blocks(content):
+        """Extract and validate mermaid blocks. Returns list of blocks or error message."""
+        blocks = []
+        current = []
+        for line in content.splitlines():
+            if keywords_re.match(line.strip()):
+                if current:
+                    blocks.append("\n".join(current))
+                current = [line]
+            else:
+                if current:
+                    current.append(line)
+        if current:
+            blocks.append("\n".join(current))
+        return blocks
 
-    if len(blocks) > 1:
-        try:
-            os.remove(file_path)
-        except Exception:
-            pass
-        msg = "Multiple Mermaid diagrams detected in the uploaded file. " "Please upload one diagram per file."
-        return (jsonify({"message": msg}), 400)
-
-    try:
+    def validate_with_mmdc(file_path):
+        """Optional: validate with mmdc if available. Returns error message or None."""
         mmdc_path = shutil.which("mmdc")
-        if mmdc_path:
+        if not mmdc_path:
+            return None
+        try:
             tmp_out = tempfile.NamedTemporaryFile(suffix=".svg", delete=False)
             tmp_out.close()
             proc = subprocess.run(
-                [
-                    mmdc_path,
-                    "-i",
-                    file_path,
-                    "-o",
-                    tmp_out.name,
-                ],
+                [mmdc_path, "-i", file_path, "-o", tmp_out.name],
                 capture_output=True,
                 text=True,
                 timeout=10,
             )
-            if proc.returncode != 0:
-                try:
-                    os.remove(file_path)
-                except Exception:
-                    pass
-                stderr = proc.stderr.strip() if proc.stderr else "Unknown mmdc error"
-                try:
-                    os.remove(tmp_out.name)
-                except Exception:
-                    pass
-                return jsonify({"message": f"Mermaid validation failed: {stderr}"}), 400
             try:
                 os.remove(tmp_out.name)
             except Exception:
                 pass
-    except Exception:
-        logger.exception("Exception while running mmdc validation")
+            if proc.returncode != 0:
+                stderr = proc.stderr.strip() if proc.stderr else "Unknown mmdc error"
+                return f"Mermaid validation failed: {stderr}"
+            return None
+        except Exception as e:
+            logger.exception("Exception while running mmdc validation")
+            return f"mmdc validation error: {e}"
 
-    return (
-        jsonify(
-            {
-                "message": "MMD uploaded and validated successfully",
-                "filename": new_filename,
-            }
-        ),
-        200,
-    )
+    def save_file_unique(filename, content):
+        """Save file with collision avoidance. Returns new filename or None on error."""
+        file_path = os.path.join(temp_folder, filename)
+        if os.path.exists(file_path):
+            base_name, ext = os.path.splitext(filename)
+            i = 1
+            candidate = f"{base_name} ({i}){ext}"
+            while os.path.exists(os.path.join(temp_folder, candidate)):
+                i += 1
+                candidate = f"{base_name} ({i}){ext}"
+            filename = candidate
+            file_path = os.path.join(temp_folder, filename)
+        try:
+            with open(file_path, "w", encoding="utf-8") as fh:
+                fh.write(content)
+            return filename
+        except Exception:
+            logger.exception("Error saving file")
+            return None
+
+    # Handle single .mmd file
+    if is_mmd:
+        try:
+            content = file.read().decode("utf-8")
+        except Exception:
+            return jsonify({"message": "Could not decode file as UTF-8"}), 400
+
+        blocks = validate_mermaid_blocks(content)
+        if not blocks:
+            return jsonify({"message": "No Mermaid diagram detected in the uploaded file"}), 400
+        if len(blocks) > 1:
+            return jsonify({"message": "Multiple Mermaid diagrams detected. Please upload one diagram per file."}), 400
+
+        # Optional mmdc validation
+        tmp_file = None
+        try:
+            tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mmd")
+            tmp_file.write(content.encode("utf-8"))
+            tmp_file.close()
+            mmdc_err = validate_with_mmdc(tmp_file.name)
+            if mmdc_err:
+                return jsonify({"message": mmdc_err}), 400
+        finally:
+            if tmp_file:
+                try:
+                    os.remove(tmp_file.name)
+                except Exception:
+                    pass
+
+        # Save the file
+        new_filename = save_file_unique(file.filename, content)
+        if not new_filename:
+            return jsonify({"message": "Could not save file"}), 500
+
+        return jsonify({"message": "File uploaded successfully", "filename": new_filename}), 200
+
+    # Handle .zip file
+    if is_zip:
+        try:
+            # Save zip to temp location
+            zip_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+            file.save(zip_tmp.name)
+            zip_tmp.close()
+
+            accepted_files = []
+            rejected_files = []
+
+            # Extract and process each .mmd file
+            try:
+                with ZipFile(zip_tmp.name, "r") as zip_ref:
+                    for member in zip_ref.namelist():
+                        # Skip non-.mmd files and directories
+                        if not member.lower().endswith(".mmd"):
+                            continue
+                        if member.endswith("/"):
+                            continue
+
+                        # Security: reject absolute paths and path traversal attempts
+                        member_path = os.path.normpath(member)
+                        if os.path.isabs(member_path) or ".." in member_path.split(os.sep):
+                            rejected_files.append({"member": member, "reason": "Security: invalid path"})
+                            continue
+
+                        try:
+                            content = zip_ref.read(member).decode("utf-8")
+                        except Exception as e:
+                            rejected_files.append({"member": member, "reason": f"Decode error: {e}"})
+                            continue
+
+                        # Validate mermaid blocks
+                        blocks = validate_mermaid_blocks(content)
+                        if not blocks:
+                            rejected_files.append({"member": member, "reason": "No Mermaid diagram detected"})
+                            continue
+                        if len(blocks) > 1:
+                            rejected_files.append({"member": member, "reason": "Multiple Mermaid diagrams detected"})
+                            continue
+
+                        # Optional mmdc validation
+                        tmp_file = None
+                        try:
+                            tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mmd")
+                            tmp_file.write(content.encode("utf-8"))
+                            tmp_file.close()
+                            mmdc_err = validate_with_mmdc(tmp_file.name)
+                            if mmdc_err:
+                                rejected_files.append({"member": member, "reason": mmdc_err})
+                                continue
+                        finally:
+                            if tmp_file:
+                                try:
+                                    os.remove(tmp_file.name)
+                                except Exception:
+                                    pass
+
+                        # Save the file
+                        base_name = os.path.basename(member)
+                        saved_name = save_file_unique(base_name, content)
+                        if saved_name:
+                            accepted_files.append(saved_name)
+                        else:
+                            rejected_files.append({"member": member, "reason": "Could not save file"})
+
+            finally:
+                try:
+                    os.remove(zip_tmp.name)
+                except Exception:
+                    pass
+
+            if not accepted_files:
+                return (
+                    jsonify(
+                        {
+                            "message": "No valid Mermaid files in ZIP",
+                            "rejected": rejected_files,
+                        }
+                    ),
+                    400,
+                )
+
+            return (
+                jsonify(
+                    {
+                        "message": "ZIP processed successfully",
+                        "filenames": accepted_files,
+                        "rejected": rejected_files if rejected_files else [],
+                    }
+                ),
+                200,
+            )
+
+        except Exception as e:
+            logger.exception("Error processing ZIP file")
+            return jsonify({"message": f"Error processing ZIP: {e}"}), 500
 
 
 @dataset_bp.route("/dataset/file/upload_github", methods=["POST"])

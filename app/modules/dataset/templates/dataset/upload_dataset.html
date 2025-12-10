@@ -599,12 +599,18 @@
                          url: "/dataset/file/upload",
                          paramName: 'file',
                          maxFilesize: 10,
-                         acceptedFiles: '.mmd',
+                         acceptedFiles: '.mmd,.zip',
                          accept: function(file, done) {
                              const alerts = document.getElementById('alerts');
                              const ext = file.name.split('.').pop();
+                             // Accept .zip without client-side validation (server will extract and validate)
+                             if (ext === 'zip') {
+                                 done();
+                                 return;
+                             }
+
                              if (ext !== 'mmd') {
-                                 const msg = 'Invalid file extension: ' + file.name + ' (use .mmd)';
+                                 const msg = 'Invalid file extension: ' + file.name + ' (use .mmd or .zip)';
                                  let alert = document.createElement('p');
                                  alert.textContent = msg;
                                  alerts.appendChild(alert);
@@ -685,10 +691,25 @@
                                 show_upload_dataset();
 
                                 console.log("File uploaded: ", response);
-                                let listItem = document.createElement('li');
-                                let h4Element = document.createElement('h4');
-                                h4Element.textContent = response.filename;
-                                listItem.appendChild(h4Element);
+                                // Handle both single file (response.filename) and multiple files (response.filenames from ZIP)
+                                const uploadedFiles = Array.isArray(response.filenames) ? response.filenames : [response.filename];
+
+                                // Show rejected files (if any) from ZIP extraction
+                                if (response.rejected && Array.isArray(response.rejected)) {
+                                    response.rejected.forEach(function(r) {
+                                        let p = document.createElement('p');
+                                        p.textContent = 'Rejected: ' + r.member + ' - ' + r.reason;
+                                        alerts.appendChild(p);
+                                        alerts.style.display = 'block';
+                                    });
+                                }
+
+                                // Create UI for each accepted file
+                                uploadedFiles.forEach(function(filename) {
+                                    let listItem = document.createElement('li');
+                                    let h4Element = document.createElement('h4');
+                                    h4Element.textContent = filename;
+                                    listItem.appendChild(h4Element);
 
                                 let formUniqueId = generateIncrementalId();
 
@@ -735,7 +756,6 @@
 
                                 removeButton.addEventListener('click', function () {
                                     fileList.removeChild(listItem);
-                                    this.removeFile(file);
 
                                     // Ajax request
                                     let xhr = new XMLHttpRequest();
@@ -752,7 +772,7 @@
 
                                         }
                                     };
-                                    xhr.send(JSON.stringify({file: file.name}));
+                                    xhr.send(JSON.stringify({file: filename}));
                                 }.bind(this));
 
                                 /*
@@ -775,10 +795,10 @@
                                 formContainer.classList.add('uvl_form', "mt-3");
                                 formContainer.style.display = "none";
 
-                                formContainer.innerHTML = `
-                                    <div class="row">
-                                        <input type="hidden" value="${response.filename}" name="mermaid_diagrams-${formUniqueId}-mmd_filename">
-                                        <div class="col-12">
+                                 formContainer.innerHTML = `
+                                     <div class="row">
+                                         <input type="hidden" value="${filename}" name="mermaid_diagrams-${formUniqueId}-mmd_filename">
+                                         <div class="col-12">
                                             <div class="row">
                                                 <div class="col-12">
                                                     <div class="mb-3">
@@ -851,6 +871,7 @@
 
                                 listItem.appendChild(formContainer);
                                 fileList.appendChild(listItem);
+                                });
 
                             });
 
