@@ -54,6 +54,10 @@ class MermaidDiagramForm(FlaskForm):
         }
 
 
+class PublishDatasetForm(FlaskForm):
+    pass
+
+
 class DataSetForm(FlaskForm):
     title = StringField("Title", validators=[DataRequired()])
     desc = TextAreaField("Description", validators=[DataRequired()])
