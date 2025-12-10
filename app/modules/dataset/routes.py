@@ -30,6 +30,7 @@ from app.modules.dataset.services import (
     DSDownloadRecordService,
     DSMetaDataService,
     DSViewRecordService,
+    TrendingDatasetsService,
 )
 from app.modules.zenodo.services import FakenodoService
 
@@ -42,6 +43,7 @@ dsmetadata_service = DSMetaDataService()
 fakenodo_service = FakenodoService()
 doi_mapping_service = DOIMappingService()
 ds_view_record_service = DSViewRecordService()
+trending_datasets_service = TrendingDatasetsService()
 
 
 @dataset_bp.route("/dataset/upload", methods=["GET", "POST"])
@@ -317,8 +319,10 @@ def subdomain_index(doi):
 
     dataset.download_count = DSDownloadRecordService().get_download_count(dataset.id)
 
+    recommended = dataset_service.recommend_simple(dataset.id, top_n=3)
+
     user_cookie = ds_view_record_service.create_cookie(dataset=dataset)
-    resp = make_response(render_template("dataset/view_dataset.html", dataset=dataset))
+    resp = make_response(render_template("dataset/view_dataset.html", dataset=dataset, recommended_datasets=recommended))
     resp.set_cookie("view_cookie", user_cookie)
     return resp
 
@@ -336,3 +340,47 @@ def get_unsynchronized_dataset(dataset_id):
     dataset.download_count = DSDownloadRecordService().get_download_count(dataset.id)
 
     return render_template("dataset/view_dataset.html", dataset=dataset)
+
+
+@dataset_bp.route("/datasets/trending", methods=["GET"])
+def get_trending_datasets():
+    try:
+        period = request.args.get("period", "week", type=str).lower()
+        limit = request.args.get("limit", 10, type=int)
+
+        valid_periods = ["week", "month"]
+        if period not in valid_periods:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": f"Invalid period '{period}'. Must be one of: {', '.join(valid_periods)}",
+                        "valid_periods": valid_periods,
+                    }
+                ),
+                400,
+            )
+
+        if limit < 1:
+            return jsonify({"success": False, "error": "Limit must be at least 1"}), 400
+
+        if limit > 100:
+            return jsonify({"success": False, "error": "Limit cannot exceed 100"}), 400
+
+        trending_datasets = trending_datasets_service.get_trending_datasets_metadata(limit=limit, period=period)
+
+        response = {
+            "success": True,
+            "data": {"datasets": trending_datasets, "count": len(trending_datasets), "period": period, "limit": limit},
+            "message": f"Successfully retrieved top {len(trending_datasets)} trending datasets for the past {period}",
+        }
+
+        return jsonify(response), 200
+
+    except ValueError as e:
+        logger.warning(f"Validation error in trending datasets endpoint: {e}")
+        return jsonify({"success": False, "error": str(e)}), 400
+
+    except Exception as e:
+        logger.error(f"Error retrieving trending datasets: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "An unexpected error occurred while retrieving trending datasets"}), 500

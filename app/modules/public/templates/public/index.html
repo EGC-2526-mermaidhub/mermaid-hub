@@ -4,6 +4,132 @@
 
 {% block content %}
 
+<div class="d-flex align-items-center gap-3 mb-3">
+    <h1 class="h2 mb-0">
+        <b>Trending</b> datasets
+    </h1>
+    <select id="trendingPeriod" class="form-select form-select-sm" style="width: 140px; max-width: 140px;" onchange="changeTrendingPeriod()">
+        <option value="week">Last Week</option>
+        <option value="month">Last Month</option>
+    </select>
+</div>
+
+{% if trending_datasets %}
+<div class="row mb-5">
+    <div class="mb-2 col-xl-8 col-lg-12 col-md-12 col-sm-12" id="trendingDatasetsContainer">
+
+        {% for dataset in trending_datasets %}
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <h2>
+
+                        <a href="{{ dataset.dataset_doi }}">
+                            {{ dataset.title }}
+                        </a>
+                    </h2>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-secondary me-2">Downloads:</span>
+                        <i class="bi bi-download fs-5 text-primary"></i>
+                        <span class="badge bg-primary fs-6">{{ dataset.download_count }}</span>
+                    </div>
+
+
+                    <div>
+                        <span class="badge bg-secondary">{{ dataset.diagram_type }}</span>
+                    </div>
+                </div>
+                <p class="text-secondary">{{ dataset.created_at.strftime('%B %d, %Y at %I:%M %p') if dataset.created_at else 'N/A' }}</p>
+
+                <div class="row mb-2">
+
+                    <div class="col-12">
+                        <p class="card-text">{{ dataset.description }}</p>
+                    </div>
+
+                </div>
+
+                <div class="row mb-2 mt-4">
+
+                    <div class="col-12">
+                        {% if dataset.authors %}
+                            {% for author in dataset.authors %}
+                            <p class="p-0 m-0">
+                                {{ author.name }}
+                                {% if author.affiliation %}
+                                ({{ author.affiliation }})
+                                {% endif %}
+                                {% if author.orcid %}
+                                ({{ author.orcid }})
+                                {% endif %}
+                            </p>
+                            {% endfor %}
+                        {% else %}
+                            <p class="p-0 m-0 text-secondary">No authors listed</p>
+                        {% endif %}
+                    </div>
+
+
+                </div>
+
+                <div class="row mb-2">
+
+                    <div class="col-12">
+                        <a href="{{ dataset.dataset_doi }}">{{ dataset.dataset_doi }}</a>
+                        <div id="trending_dataset_doi_{{ dataset.id }}" style="display: none">
+                            {{ dataset.dataset_doi }}
+                        </div>
+
+                        <i data-feather="clipboard" class="center-button-icon" style="cursor: pointer"
+                            onclick="copyText('trending_dataset_doi_{{ dataset.id }}')"></i>
+                    </div>
+
+
+
+                </div>
+
+                <div class="row mb-2">
+
+                    <div class="col-12">
+                        {% for tag in dataset.tags.split(',') if dataset.tags %}
+                        <span class="badge bg-secondary">{{ tag.strip() }}</span>
+                        {% endfor %}
+                    </div>
+
+                </div>
+
+                <div class="row  mt-4">
+                    <div class="col-12">
+                        <a href="{{ dataset.dataset_doi }}" class="btn btn-outline-primary btn-sm"
+                            style="border-radius: 5px;">
+                            <i data-feather="eye" class="center-button-icon"></i>
+                            View dataset
+                        </a>
+
+                        <a href="/dataset/download/{{ dataset.id }}" class="btn btn-outline-primary btn-sm"
+                            style="border-radius: 5px;">
+                            <i data-feather="download" class="center-button-icon"></i>
+                            Download
+                        </a>
+                    </div>
+                </div>
+
+
+            </div>
+        </div>
+        {% endfor %}
+
+    </div>
+</div>
+{% else %}
+<div class="row mb-5">
+    <div class="mb-2 col-xl-8 col-lg-12 col-md-12 col-sm-12">
+        <p class="text-secondary">No trending datasets available for this period.</p>
+    </div>
+</div>
+{% endif %}
+
 <h1 class="h2 mb-3">
 
     <b>Latest</b> datasets
@@ -295,4 +421,97 @@
 
 {% block scripts %}
 <script src="{{ url_for('public.scripts') }}"></script>
+<script>
+    function changeTrendingPeriod() {
+        const period = document.getElementById('trendingPeriod').value;
+        fetch(`/datasets/trending?period=${period}&limit=5`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data.datasets.length > 0) {
+                    loadTrendingDatasets(data.data.datasets);
+                } else {
+                    showNoTrendingDatasets();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching trending datasets:', error);
+                showNoTrendingDatasets();
+            });
+    }
+
+    function loadTrendingDatasets(datasets) {
+        const container = document.getElementById('trendingDatasetsContainer');
+        if (!container) return;
+
+        let html = '';
+        datasets.forEach(dataset => {
+            const doiLink = dataset.doi || '#';
+            const downloadLink = `/dataset/download/${dataset.id}`;
+            const tags = dataset.tags ? dataset.tags.split(',').map(tag => 
+                `<span class="badge bg-secondary">${tag.trim()}</span>`
+            ).join('') : '';
+
+            html += `
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <h2>
+                                <a href="${doiLink}">
+                                    ${dataset.title}
+                                </a>
+                            </h2>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-secondary me-2">Downloads:</span>
+                                <i class="bi bi-download fs-5 text-primary"></i>
+                                <span class="badge bg-primary fs-6">${dataset.download_count}</span>
+                            </div>
+                            <div>
+                                <span class="badge bg-secondary">${dataset.diagram_type}</span>
+                            </div>
+                        </div>
+                        <p class="text-secondary">${dataset.created_at ? new Date(dataset.created_at).toLocaleDateString() : 'N/A'}</p>
+                        <div class="row mb-2">
+                            <div class="col-12">
+                                <p class="card-text">${dataset.description}</p>
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-12">
+                                <a href="${doiLink}">${doiLink}</a>
+                                <i data-feather="clipboard" class="center-button-icon" style="cursor: pointer" onclick="copyText('trending_doi_${dataset.id}')"></i>
+                                <div id="trending_doi_${dataset.id}" style="display: none">${doiLink}</div>
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-12">
+                                ${tags}
+                            </div>
+                        </div>
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <a href="${doiLink}" class="btn btn-outline-primary btn-sm" style="border-radius: 5px;">
+                                    <i data-feather="eye" class="center-button-icon"></i>
+                                    View dataset
+                                </a>
+                                <a href="${downloadLink}" class="btn btn-outline-primary btn-sm" style="border-radius: 5px;">
+                                    <i data-feather="download" class="center-button-icon"></i>
+                                    Download
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+        feather.replace();
+    }
+
+    function showNoTrendingDatasets() {
+        const container = document.getElementById('trendingDatasetsContainer');
+        if (!container) return;
+        container.innerHTML = '<p class="text-secondary">No trending datasets available for this period.</p>';
+    }
+</script>
 {% endblock %}

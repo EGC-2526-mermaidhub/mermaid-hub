@@ -111,6 +111,8 @@ class DataSet(db.Model):
         return DataSetService().get_mermaidhub_doi(self)
 
     def to_dict(self):
+        from app.modules.dataset.services import DSDownloadRecordService
+
         return {
             "title": self.ds_meta_data.title,
             "id": self.id,
@@ -129,6 +131,7 @@ class DataSet(db.Model):
             "files_count": self.get_files_count(),
             "total_size_in_bytes": self.get_file_total_size(),
             "total_size_in_human_format": self.get_file_total_size_for_human(),
+            "download_count": DSDownloadRecordService().get_download_count(self.id),
         }
 
     def __repr__(self):

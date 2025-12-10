@@ -1,0 +1,10 @@
+# <type>(scope?): <short summary>
+# Example: feat(auth): add OAuth login
+
+# Body (optional):
+# - Explain what and why, not how.
+# - Wrap lines at 72 chars.
+
+# Footer (optional):
+# - BREAKING CHANGE: <description>
+# - Fixes #123

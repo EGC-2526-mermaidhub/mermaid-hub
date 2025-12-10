@@ -97,6 +97,19 @@ function send_query() {
 
                                         <div class="col-md-4 col-12">
                                             <span class=" text-secondary">
+                                                Downloads
+                                            </span>
+                                        </div>
+                                        <div class="col-md-8 col-12">
+                                            <span class="badge bg-info">${dataset.download_count || 0} <i class="bi bi-download"></i></span>
+                                        </div>
+
+                                    </div>
+
+                                    <div class="row mb-2">
+
+                                        <div class="col-md-4 col-12">
+                                            <span class=" text-secondary">
                                                 Tags
                                             </span>
                                         </div>

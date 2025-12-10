@@ -1,0 +1,36 @@
+name: Safety scan
+
+on:
+  schedule:
+    - cron: '0 4 */3 * *'
+  push:
+    paths:
+      - "requirements.txt"
+  workflow_dispatch:
+
+jobs:
+  safety-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip && pip install safety
+
+      - name: Run Safety Scan
+        run: |
+          safety check -r requirements.txt --full-report > safety-report.txt || true
+
+      - name: Upload Safety Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: safety-report
+          path: safety-report.txt

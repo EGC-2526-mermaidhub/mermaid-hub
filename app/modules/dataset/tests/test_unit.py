@@ -11,6 +11,7 @@ from app.modules.dataset.services import (
     DSDownloadRecordService,
     DSViewRecordService,
     SizeService,
+    TrendingDatasetsService,
     calculate_checksum_and_size,
 )
 
@@ -743,3 +744,143 @@ def test_download_with_existing_cookie(test_client):
         shutil.rmtree(temp_dir)
 
     test_client.get("/logout", follow_redirects=True)
+
+
+def test_trending_datasets_service_initialization():
+    """Test TrendingDatasetsService initializes correctly"""
+    service = TrendingDatasetsService()
+    assert service.repository is not None
+
+
+def test_get_period_days_week():
+    """Test _get_period_days returns 7 for week"""
+    service = TrendingDatasetsService()
+    result = service._get_period_days("week")
+    assert result == 7
+
+
+def test_get_period_days_month():
+    """Test _get_period_days returns 30 for month"""
+    service = TrendingDatasetsService()
+    result = service._get_period_days("month")
+    assert result == 30
+
+
+def test_get_period_days_invalid():
+    """Test _get_period_days raises ValueError for invalid period"""
+    service = TrendingDatasetsService()
+    with pytest.raises(ValueError) as excinfo:
+        service._get_period_days("year")
+    assert "Invalid period 'year'" in str(excinfo.value)
+    assert "Must be 'week' or 'month'" in str(excinfo.value)
+
+
+def test_get_trending_datasets_calls_repository():
+    """Test get_trending_datasets delegates to repository with correct parameters"""
+    service = TrendingDatasetsService()
+    service.repository = MagicMock()
+    service.repository.get_top_downloaded_datasets.return_value = []
+
+    result = service.get_trending_datasets(limit=5, period="week")
+
+    service.repository.get_top_downloaded_datasets.assert_called_once_with(limit=5, period_days=7)
+    assert result == []
+
+
+def test_get_trending_datasets_metadata_calls_repository():
+    """Test get_trending_datasets_metadata delegates to repository with correct parameters"""
+    service = TrendingDatasetsService()
+    service.repository = MagicMock()
+    service.repository.get_top_downloaded_datasets_metadata.return_value = []
+
+    result = service.get_trending_datasets_metadata(limit=10, period="month")
+
+    service.repository.get_top_downloaded_datasets_metadata.assert_called_once_with(limit=10, period_days=30)
+    assert result == []
+
+
+def test_get_weekly_trending_datasets():
+    """Test get_weekly_trending_datasets convenience method"""
+    service = TrendingDatasetsService()
+    service.repository = MagicMock()
+    mock_data = [("dataset1", 10), ("dataset2", 5)]
+    service.repository.get_top_downloaded_datasets.return_value = mock_data
+
+    result = service.get_weekly_trending_datasets(limit=2)
+
+    service.repository.get_top_downloaded_datasets.assert_called_once_with(limit=2, period_days=7)
+    assert result == mock_data
+
+
+def test_get_monthly_trending_datasets():
+    """Test get_monthly_trending_datasets convenience method"""
+    service = TrendingDatasetsService()
+    service.repository = MagicMock()
+    mock_data = [("dataset1", 20), ("dataset2", 15)]
+    service.repository.get_top_downloaded_datasets.return_value = mock_data
+
+    result = service.get_monthly_trending_datasets(limit=2)
+
+    service.repository.get_top_downloaded_datasets.assert_called_once_with(limit=2, period_days=30)
+    assert result == mock_data
+
+
+def test_get_weekly_trending_datasets_metadata():
+    """Test get_weekly_trending_datasets_metadata convenience method"""
+    service = TrendingDatasetsService()
+    service.repository = MagicMock()
+    mock_data = [{"id": 1, "title": "Dataset 1", "download_count": 10}]
+    service.repository.get_top_downloaded_datasets_metadata.return_value = mock_data
+
+    result = service.get_weekly_trending_datasets_metadata(limit=1)
+
+    service.repository.get_top_downloaded_datasets_metadata.assert_called_once_with(limit=1, period_days=7)
+    assert result == mock_data
+
+
+def test_get_monthly_trending_datasets_metadata():
+    """Test get_monthly_trending_datasets_metadata convenience method"""
+    service = TrendingDatasetsService()
+    service.repository = MagicMock()
+    mock_data = [{"id": 1, "title": "Dataset 1", "download_count": 20}]
+    service.repository.get_top_downloaded_datasets_metadata.return_value = mock_data
+
+    result = service.get_monthly_trending_datasets_metadata(limit=1)
+
+    service.repository.get_top_downloaded_datasets_metadata.assert_called_once_with(limit=1, period_days=30)
+    assert result == mock_data
+
+
+def test_trending_datasets_service_invalid_period_raises_error():
+    """Test that providing an invalid period raises ValueError"""
+    service = TrendingDatasetsService()
+    service.repository = MagicMock()
+
+    with pytest.raises(ValueError) as excinfo:
+        service.get_trending_datasets(limit=10, period="invalid")
+
+    assert "Invalid period 'invalid'" in str(excinfo.value)
+
+
+def test_trending_datasets_service_default_parameters():
+    """Test that service uses default parameters correctly"""
+    service = TrendingDatasetsService()
+    service.repository = MagicMock()
+    service.repository.get_top_downloaded_datasets.return_value = []
+
+    # Test with defaults
+    service.get_trending_datasets()
+
+    service.repository.get_top_downloaded_datasets.assert_called_once_with(limit=10, period_days=7)
+
+
+def test_trending_datasets_service_returns_empty_list_when_no_data():
+    """Test service returns empty list when no trending datasets exist"""
+    service = TrendingDatasetsService()
+    service.repository = MagicMock()
+    service.repository.get_top_downloaded_datasets.return_value = []
+
+    result = service.get_trending_datasets(limit=5, period="month")
+
+    assert result == []
+    assert isinstance(result, list)
