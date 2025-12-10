@@ -22,7 +22,7 @@ from flask import (
 from flask_login import current_user, login_required
 
 from app.modules.dataset import dataset_bp
-from app.modules.dataset.forms import DataSetForm
+from app.modules.dataset.forms import DataSetForm, PublishDatasetForm
 from app.modules.dataset.services import (
     AuthorService,
     DataSetService,
@@ -52,52 +52,61 @@ def create_dataset():
 
         dataset = None
 
+        data = request.form
+
+        is_draft_str = data.get("is_draft", "false")
+        is_draft_status = str(is_draft_str).lower() == "true"
+        should_publish = not is_draft_status
+
         if not form.validate_on_submit():
             return jsonify({"message": form.errors}), 400
 
         try:
             logger.info("Creating dataset...")
-            dataset = dataset_service.create_from_form(form=form, current_user=current_user)
+            dataset = dataset_service.create_from_form(form=form, current_user=current_user, is_draft=is_draft_status)
+            print(dataset)
             logger.info(f"Created dataset: {dataset}")
             dataset_service.move_mermaid_diagrams(dataset)
         except Exception as exc:
             logger.exception(f"Exception while create dataset data in local {exc}")
             return jsonify({"Exception while create dataset data in local: ": str(exc)}), 400
 
-        # send dataset as deposition to Zenodo
-        data = {}
-        try:
-            zenodo_response_json = fakenodo_service.create_new_deposition(dataset)
-            response_data = json.dumps(zenodo_response_json)
-            data = json.loads(response_data)
-        except Exception as exc:
+        if should_publish:
+
+            logger.info("Publishing dataset to Zenodo...")
+
+            # send dataset as deposition to Zenodo
             data = {}
-            zenodo_response_json = {}
-            logger.exception(f"Exception while create dataset data in Zenodo {exc}")
-
-        if data.get("conceptrecid"):
-            deposition_id = data.get("id")
-
-            # update dataset with deposition id in Zenodo
-            dataset_service.update_dsmetadata(dataset.ds_meta_data_id, deposition_id=deposition_id)
-
             try:
+                zenodo_response_json = fakenodo_service.create_new_deposition(dataset)
+                response_data = json.dumps(zenodo_response_json)
+                data = json.loads(response_data)
+            except Exception as exc:
+                data = {}
+                zenodo_response_json = {}
+                logger.exception(f"Exception while create dataset data in Zenodo {exc}")
 
-                # iterate for each mermaid diagram (one mermaid diagram = one request to Zenodo)
-                for mermaid_diagram in dataset.mermaid_diagrams:
-                    fakenodo_service.upload_file(dataset, deposition_id, mermaid_diagram)
+            if data.get("conceptrecid"):
+                deposition_id = data.get("id")
 
-                # publish deposition
-                fakenodo_service.publish_deposition(deposition_id)
+                # update dataset with deposition id in Zenodo
+                dataset_service.update_dsmetadata(dataset.ds_meta_data_id, deposition_id=deposition_id)
 
-                # update DOI
-                deposition_doi = fakenodo_service.get_doi(deposition_id)
-                dataset_service.update_dsmetadata(dataset.ds_meta_data_id, dataset_doi=deposition_doi)
-            except Exception as e:
-                msg = f"it has not been possible upload mermaid diagrams in Zenodo and update the DOI: {e}"
-                return jsonify({"message": msg}), 200
+                try:
+                    # iterate for each mermaid diagram (one mermaid diagram = one request to Zenodo)
+                    for mermaid_diagram in dataset.mermaid_diagrams:
+                        fakenodo_service.upload_file(dataset, deposition_id, mermaid_diagram)
 
-        # Delete temp folder
+                    # publish deposition
+                    fakenodo_service.publish_deposition(deposition_id)
+
+                    # update DOI and set is_draft=False
+                    deposition_doi = fakenodo_service.get_doi(deposition_id)
+                    dataset_service.update_dsmetadata(dataset.ds_meta_data_id, dataset_doi=deposition_doi, is_draft=False)
+                except Exception as e:
+                    msg = f"it has not been possible upload mermaid diagrams in Zenodo and update the DOI: {e}"
+                    return jsonify({"message": msg}), 200
+
         file_path = current_user.temp_folder()
         if os.path.exists(file_path) and os.path.isdir(file_path):
             shutil.rmtree(file_path)
@@ -108,6 +117,30 @@ def create_dataset():
     return render_template("dataset/upload_dataset.html", form=form)
 
 
+"""
+# Ejemplo en routes.py
+@dataset_bp.route("/dataset/edit/<int:dataset_id>", methods=["GET", "POST"])
+@login_required
+def edit_dataset(dataset_id):
+    dataset = dataset_service.get_dataset_by_id(dataset_id)
+    # 1. Rellenar el formulario con los datos existentes
+    form = DataSetForm(obj=dataset.ds_meta_data, data={'mermaid_diagrams': dataset.mermaid_diagrams})
+    # 2. Manejar la petición POST con la lógica AJAX/JSON (similar a create_dataset)
+    if request.method == "POST":
+        # ... Lógica de procesamiento de JSON y validación (ya discutida) ...
+        # ... Redirigir a view_dataset o list_dataset ...
+        pass # Implementar lógica de guardado aquí
+
+    # 3. Renderizar la plantilla
+    return render_template(
+        "dataset/edit_dataset.html",
+        form=form,
+        dataset=dataset, # <- ¡Esencial para el estado de draft!
+        is_editing=True
+    )
+"""
+
+
 @dataset_bp.route("/dataset/list", methods=["GET", "POST"])
 @login_required
 def list_dataset():
@@ -116,6 +149,28 @@ def list_dataset():
         datasets=dataset_service.get_synchronized(current_user.id),
         local_datasets=dataset_service.get_unsynchronized(current_user.id),
     )
+
+
+@dataset_bp.route("/dataset/edit/<int:dataset_id>", methods=["GET", "POST"])
+@login_required
+def edit_dataset(dataset_id):
+    dataset = dataset_service.get_unsynchronized_dataset(current_user.id, dataset_id)
+    if not dataset:
+        abort(404)
+
+    form = DataSetForm(obj=dataset.ds_meta_data)
+
+    if request.method == "POST":
+        if form.validate_on_submit():
+            dataset.ds_meta_data.title = form.title.data
+            dataset.ds_meta_data.description = form.desc.data
+            dataset.ds_meta_data.tags = form.tags.data
+            dataset.ds_meta_data.is_draft = form.is_draft.data == "true"
+
+            """db.session.commit()"""
+            return redirect(url_for("dataset.view_dataset", dataset_id=dataset.id))
+
+    return render_template("dataset/edit_dataset.html", form=form, dataset=dataset)
 
 
 @dataset_bp.route("/dataset/file/upload", methods=["POST"])
@@ -246,6 +301,46 @@ def upload():
     )
 
 
+@dataset_bp.route("/dataset/publish/<int:dataset_id>", methods=["POST"])
+@login_required
+def publish_dataset(dataset_id):
+    dataset = dataset_service.get_unsynchronized_dataset(current_user.id, dataset_id)
+    if not dataset:
+        abort(404)
+
+    logger.info(f"Publishing draft dataset {dataset_id} to Zenodo.")
+
+    data = {}
+    try:
+        zenodo_response_json = fakenodo_service.create_new_deposition(dataset)
+        data = json.loads(json.dumps(zenodo_response_json))
+    except Exception as exc:
+        logger.exception(f"Zenodo API error during deposition creation for {dataset_id}: {exc}")
+        return redirect(url_for("dataset.view_dataset", dataset_id=dataset_id)), 500
+
+    if data.get("conceptrecid"):
+        deposition_id = data.get("id")
+        dataset_service.update_dsmetadata(dataset.ds_meta_data_id, deposition_id=deposition_id)
+
+        try:
+            for mermaid_diagram in dataset.mermaid_diagrams:
+                fakenodo_service.upload_file(dataset, deposition_id, mermaid_diagram)
+
+            fakenodo_service.publish_deposition(deposition_id)
+
+            deposition_doi = fakenodo_service.get_doi(deposition_id)
+            dataset_service.update_dsmetadata(dataset.ds_meta_data_id, dataset_doi=deposition_doi, is_draft=False)
+            logger.info(f"Dataset {dataset_id} successfully published to Zenodo with DOI {deposition_doi}")
+            return redirect(url_for("dataset.list_dataset"))
+
+        except Exception as e:
+            logger.exception(f"Zenodo API error during file upload/publish for {dataset_id}: {e}")
+            return redirect(url_for("dataset.view_dataset", dataset_id=dataset_id)), 500
+    else:
+        logger.error(f"Zenodo did not return conceptrecid for {dataset_id}. Response: {data}")
+        return redirect(url_for("dataset.list_dataset")), 500
+
+
 @dataset_bp.route("/dataset/file/delete", methods=["POST"])
 def delete():
     data = request.get_json()
@@ -318,7 +413,9 @@ def subdomain_index(doi):
     dataset.download_count = DSDownloadRecordService().get_download_count(dataset.id)
 
     user_cookie = ds_view_record_service.create_cookie(dataset=dataset)
-    resp = make_response(render_template("dataset/view_dataset.html", dataset=dataset))
+    form = PublishDatasetForm()
+    resp = make_response(render_template("dataset/view_dataset.html", dataset=dataset, form=form))
+
     resp.set_cookie("view_cookie", user_cookie)
     return resp
 
@@ -326,8 +423,6 @@ def subdomain_index(doi):
 @dataset_bp.route("/dataset/unsynchronized/<int:dataset_id>/", methods=["GET"])
 @login_required
 def get_unsynchronized_dataset(dataset_id):
-
-    # Get dataset
     dataset = dataset_service.get_unsynchronized_dataset(current_user.id, dataset_id)
 
     if not dataset:
@@ -335,4 +430,6 @@ def get_unsynchronized_dataset(dataset_id):
 
     dataset.download_count = DSDownloadRecordService().get_download_count(dataset.id)
 
-    return render_template("dataset/view_dataset.html", dataset=dataset)
+    form = PublishDatasetForm()
+
+    return render_template("dataset/view_dataset.html", dataset=dataset, form=form)
