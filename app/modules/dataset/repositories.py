@@ -83,7 +83,7 @@ class DataSetRepository(BaseRepository):
     def get_synchronized(self, current_user_id: int) -> DataSet:
         return (
             self.model.query.join(DSMetaData)
-            .filter(DataSet.user_id == current_user_id, DSMetaData.dataset_doi.isnot(None))
+            .filter(DataSet.user_id == current_user_id, DSMetaData.is_draft == 0)
             .order_by(self.model.created_at.desc())
             .all()
         )
@@ -91,7 +91,7 @@ class DataSetRepository(BaseRepository):
     def get_unsynchronized(self, current_user_id: int) -> DataSet:
         return (
             self.model.query.join(DSMetaData)
-            .filter(DataSet.user_id == current_user_id, DSMetaData.dataset_doi.is_(None))
+            .filter(DataSet.user_id == current_user_id, DSMetaData.is_draft == 1)
             .order_by(self.model.created_at.desc())
             .all()
         )
@@ -99,24 +99,18 @@ class DataSetRepository(BaseRepository):
     def get_unsynchronized_dataset(self, current_user_id: int, dataset_id: int) -> DataSet:
         return (
             self.model.query.join(DSMetaData)
-            .filter(DataSet.user_id == current_user_id, DataSet.id == dataset_id, DSMetaData.dataset_doi.is_(None))
+            .filter(DataSet.user_id == current_user_id, DataSet.id == dataset_id, DSMetaData.is_draft == 1)
             .first()
         )
 
     def count_synchronized_datasets(self):
-        return self.model.query.join(DSMetaData).filter(DSMetaData.dataset_doi.isnot(None)).count()
+        return self.model.query.join(DSMetaData).filter(DSMetaData.is_draft == 0).count()
 
     def count_unsynchronized_datasets(self):
-        return self.model.query.join(DSMetaData).filter(DSMetaData.dataset_doi.is_(None)).count()
+        return self.model.query.join(DSMetaData).filter(DSMetaData.is_draft == 1).count()
 
     def latest_synchronized(self):
-        return (
-            self.model.query.join(DSMetaData)
-            .filter(DSMetaData.dataset_doi.isnot(None))
-            .order_by(desc(self.model.id))
-            .limit(5)
-            .all()
-        )
+        return self.model.query.join(DSMetaData).filter(DSMetaData.is_draft == 0).order_by(desc(self.model.id)).limit(5).all()
 
 
 class DOIMappingRepository(BaseRepository):
