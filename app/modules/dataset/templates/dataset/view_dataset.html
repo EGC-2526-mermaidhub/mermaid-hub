@@ -93,6 +93,41 @@
 
         </div>
 
+        <div class="row mb-2">
+
+          <div class="col-md-4 col-12">
+            <span class=" text-secondary">
+              Status
+            </span>
+          </div>
+          <div class="col-md-8 col-12">
+            {% if dataset.ds_meta_data.is_draft %}
+            <span class="badge bg-warning text-dark">DRAFT (Not published)</span>
+            {% else %}
+            <span class="badge bg-success">PUBLISHED</span>
+            {% endif %}
+          </div>
+
+        </div>
+
+        {% if dataset.ds_meta_data.is_draft %}
+        <div class="row mb-3">
+          <div class="col-md-4 col-12"></div>
+          <div class="col-md-8 col-12">
+
+            <button
+              class="btn btn-success btn-sm me-2"
+              style="border-radius: 5px;"
+              data-bs-toggle="modal"
+              data-bs-target="#publishDatasetModal"
+            >
+              <i data-feather="upload"></i>
+              Publish dataset
+            </button>
+          </div>
+        </div>
+        {% endif %}
+
         {% if dataset.ds_meta_data.publication_doi %}
         <div class="row mb-2">
           <div class="col-md-4 col-12">
@@ -578,5 +613,50 @@
     });
   }
 </script>
+
+
+
+{% if dataset.ds_meta_data.is_draft and current_user.is_authenticated %}
+
+<div class="modal fade" id="publishDatasetModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Publish dataset</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <p>
+          This action will publish the dataset to Zenodo and make it publicly available.
+        </p>
+        <p class="text-danger mb-0">
+          This operation <b>cannot be undone</b>.
+        </p>
+      </div>
+
+      <div class="modal-footer">
+
+        <form method="POST"
+              action="{{ url_for('dataset.publish_dataset', dataset_id=dataset.id) }}">
+
+          {{ form.csrf_token }}
+
+          <button type="submit" class="btn btn-success">
+            <i data-feather="upload"></i> Confirm publish
+          </button>
+
+        </form>
+
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Cancel
+        </button>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endif %}
 
 {% endblock %}
