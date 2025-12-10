@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from flask import url_for
 
+from app.modules.auth.models import User
+from app.modules.auth.services import AuthenticationService
 from app.modules.dataset.models import DiagramType
 from app.modules.dataset.services import (
     DataSetService,
@@ -376,10 +378,20 @@ def test_client(test_client):
     """
     Extends the test_client fixture to add additional specific data for module testing.
     """
+    from app import limiter
+
+    limiter.enabled = False
+    test_client.application.config["RATELIMIT_ENABLED"] = False
+    test_client.application.config["WTF_CSRF_ENABLED"] = False
     with test_client.application.app_context():
         # Add HERE new elements to the database that you want to exist in the test context.
         # DO NOT FORGET to use db.session.add(<element>) and db.session.commit() to save the data.
-        pass
+        existing_user = User.query.filter_by(email="test@example.com").first()
+
+        if not existing_user:
+            # 2. Usamos el servicio para crear Usuario + Perfil al mismo tiempo
+            auth_service = AuthenticationService()
+            auth_service.create_with_profile(email="test@example.com", password="test1234", name="John", surname="Doe")
 
     yield test_client
 
