@@ -112,6 +112,7 @@ class DataSet(db.Model):
 
     def to_dict(self):
         from app.modules.dataset.services import DSDownloadRecordService
+
         return {
             "title": self.ds_meta_data.title,
             "id": self.id,
