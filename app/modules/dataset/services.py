@@ -120,15 +120,21 @@ class DataSetService(BaseService):
     def total_dataset_views(self) -> int:
         return self.dsviewrecord_repostory.total_dataset_views()
 
-    def create_from_form(self, form, current_user) -> DataSet:
+    def create_from_form(self, form, current_user, is_draft: bool = True) -> DataSet:
         main_author = {
             "name": f"{current_user.profile.surname}, {current_user.profile.name}",
             "affiliation": current_user.profile.affiliation,
             "orcid": current_user.profile.orcid,
         }
         try:
-            logger.info(f"Creating dsmetadata...: {form.get_dsmetadata()}")
-            dsmetadata = self.dsmetadata_repository.create(**form.get_dsmetadata())
+            dsmetadata_kwargs = form.get_dsmetadata()
+
+            dsmetadata_kwargs["is_draft"] = is_draft
+
+            logger.info(f"Creating dsmetadata...: {dsmetadata_kwargs}")
+
+            dsmetadata = self.dsmetadata_repository.create(**dsmetadata_kwargs)
+
             for author_data in [main_author] + form.get_authors():
                 author = self.author_repository.create(commit=False, ds_meta_data_id=dsmetadata.id, **author_data)
                 dsmetadata.authors.append(author)
@@ -160,6 +166,16 @@ class DataSetService(BaseService):
 
     def update_dsmetadata(self, id, **kwargs):
         return self.dsmetadata_repository.update(id, **kwargs)
+
+    def publish(self, dataset):
+        zenodo_result = self.zenodo_service.publish_dataset(dataset)
+
+        dataset.ds_meta_data.is_draft = False
+        dataset.ds_meta_data.publication_doi = zenodo_result.publication_doi
+        dataset.ds_meta_data.dataset_doi = zenodo_result.dataset_doi
+        dataset.ds_meta_data.deposition_id = zenodo_result.deposition_id
+
+        self.db.session.commit()
 
     def get_mermaidhub_doi(self, dataset: DataSet) -> str:
         try:

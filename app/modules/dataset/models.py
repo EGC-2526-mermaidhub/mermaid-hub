@@ -64,6 +64,7 @@ class DSMetaData(db.Model):
     dataset_doi = db.Column(db.String(120))
     tags = db.Column(db.String(120))
     ds_metrics_id = db.Column(db.Integer, db.ForeignKey("ds_metrics.id"))
+    is_draft = db.Column(db.Boolean, default=True, nullable=False)
     ds_metrics = db.relationship("DSMetrics", uselist=False, backref="ds_meta_data", cascade="all, delete")
     authors = db.relationship("Author", backref="ds_meta_data", lazy=True, cascade="all, delete")
 

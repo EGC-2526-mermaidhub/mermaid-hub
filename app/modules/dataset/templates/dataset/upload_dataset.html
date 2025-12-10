@@ -88,7 +88,47 @@
                                 </div>
                             </div>
 
-                        </div>
+                        </div> <div class="row" style="padding-left: 2rem">
+                            <div class="col-12">
+                                <label class="form-label"><b>Save as draft?</b></label>
+                                <div class="btn-group" role="group" aria-label="Draft toggle">
+                                    <input type="radio" class="btn-check" name="is_draft_option" id="draft_yes" value="true" autocomplete="off">
+                                    <label class="btn btn-outline-primary" for="draft_yes">Yes</label>
+
+                                    <input type="radio" class="btn-check" name="is_draft_option" id="draft_no" value="false" autocomplete="off" checked>
+                                    <label class="btn btn-outline-primary" for="draft_no">No</label>
+                                </div>
+
+                                <input type="hidden" name="is_draft" id="is_draft_hidden" value="false">
+
+                                <small class="form-text text-muted">
+                                    If set to <b>Yes</b>, the dataset will NOT be uploaded to Zenodo and will stay in draft mode.
+                                </small>
+                            </div>
+                        </div> <script>
+                                const draftYes = document.getElementById("draft_yes");
+                                const draftNo = document.getElementById("draft_no");
+                                const zenodoCheckbox = document.getElementById("agreeCheckbox");
+                                const uploadBtn = document.getElementById("upload_button");
+                                const isDraftHidden = document.getElementById("is_draft_hidden");
+
+                                isDraftHidden.value = "false";
+
+                                draftYes.addEventListener("change", function () {
+                                    isDraftHidden.value = "true";
+
+                                    zenodoCheckbox.checked = false;
+                                    zenodoCheckbox.disabled = true;
+                                    uploadBtn.disabled = false;
+                                });
+
+                                draftNo.addEventListener("change", function () {
+                                    isDraftHidden.value = "false";
+
+                                    zenodoCheckbox.disabled = false;
+                                    uploadBtn.disabled = !zenodoCheckbox.checked;
+                                });
+                            </script>
 
                         <h1 class="h3 mb-3 mt-4">
                           Authors
@@ -201,7 +241,7 @@
                 </div>
 
 
-            </div>
+            </form> </div>
         </div>
 
         <div class="col-xl-6 col-lg-12 col-md-12 col-sm-12">
@@ -625,17 +665,21 @@
                 <script>
                     const checkbox = document.getElementById('agreeCheckbox');
                     const upload_button = document.getElementById('upload_button');
+                
+                    const mainForm = document.querySelector('#basic_info_form').closest('form');
 
                     checkbox.addEventListener('change', function () {
                         upload_button.disabled = !checkbox.checked;
                     });
+                    
+                    upload_button.addEventListener('click', function() {
+                        if (mainForm) {
+                            mainForm.submit();
+                        }
+                    });
                 </script>
 
             </div>
-
-
-
-
         </div>
 
     </div>
