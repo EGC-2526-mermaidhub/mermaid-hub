@@ -191,9 +191,6 @@ class DataSetService(BaseService):
             domain = os.getenv("DOMAIN", "localhost")
             return f"http://{domain}/doi/{dataset.ds_meta_data.dataset_doi}"
 
-    def diagram_similarity(self, ds1, ds2):
-        return 1 if ds1.ds_meta_data.diagram_type == ds2.ds_meta_data.diagram_type else 0
-
     def tag_similarity(self, ds1, ds2):
         tags1 = set((ds1.ds_meta_data.tags or "").replace(",", " ").split())
         tags2 = set((ds2.ds_meta_data.tags or "").replace(",", " ").split())
@@ -209,38 +206,39 @@ class DataSetService(BaseService):
         downloads = self.dsdownloadrecord_repository.model.query.filter_by(dataset_id=dataset_id).count()
         return views + downloads
 
-    def recommend_simple(self, dataset_id, top_n=3):
-        datasets = self.repository.model.query.all()
+    def recommend_simple(self, dataset, top_n=3):
+        target_ds = dataset
+        target_meta = target_ds.ds_meta_data
+        target_diagram_type = target_meta.diagram_type
 
-        target = next((ds for ds in datasets if ds.id == dataset_id), None)
-        if not target:
+        datasets = self.repository.model.query.join(DataSet.ds_meta_data).filter(
+            DSMetaData.diagram_type == target_diagram_type,
+            DataSet.id != dataset.id,
+            DSMetaData.is_draft == 0,
+        ).all()
+
+        if not datasets:
             return []
 
-        popularity_list = []
-        for ds in datasets:
-            pop = self.get_popularity(ds.id)
-            popularity_list.append(pop)
-
+        popularity_list = [self.get_popularity(ds.id) for ds in datasets]
         max_popularity = max(popularity_list) or 1
 
         results = []
-
         for ds, pop in zip(datasets, popularity_list):
-            if ds.id == dataset_id:
-                continue
+            tag_sim = self.tag_similarity(target_ds, ds)
+            author_sim = self.author_similarity(target_ds, ds)
+            popularity_score = 4 * (pop / max_popularity)
 
-            diag_sim = self.diagram_similarity(target, ds)
-            tag_sim = self.tag_similarity(target, ds)
-            author_sim = self.author_similarity(target, ds)
-            popularity_score = 0.5 * (pop / max_popularity)
-
-            score = 3 * diag_sim + 1 * tag_sim + 1 * author_sim + popularity_score
+            score = (
+                3 * tag_sim +
+                1 * author_sim +
+                popularity_score
+            )
 
             results.append((ds, score))
 
         results.sort(key=lambda x: x[1], reverse=True)
-
-        return [ds for ds, s in results[:top_n]]
+        return [ds for ds, _ in results[:top_n]]
 
 
 class AuthorService(BaseService):
