@@ -42,3 +42,9 @@ def index():
         total_dataset_views=total_dataset_views,
         total_mermaid_diagram_views=total_mermaid_diagram_views,
     )
+
+
+@public_bp.route("/trending")
+def trending():
+    logger.info("Access trending datasets page")
+    return render_template("public/trending.html")
