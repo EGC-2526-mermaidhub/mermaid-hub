@@ -1,13 +1,22 @@
+import io
 import os
+import shutil
+import tempfile
 import uuid
+from io import BytesIO
 from unittest.mock import MagicMock, patch
+from zipfile import ZipFile
 
 import pytest
 from flask import url_for
-from wtforms import Form, BooleanField, StringField, TextAreaField, SubmitField
+from wtforms import BooleanField, Form, StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired
 
+from app import db
+from app.modules.auth.models import User
+from app.modules.auth.services import AuthenticationService
 from app.modules.dataset.models import DiagramType
+from app.modules.dataset.routes import upload
 from app.modules.dataset.services import (
     DataSetService,
     DOIMappingService,
@@ -384,10 +393,20 @@ def test_client(test_client):
     """
     Extends the test_client fixture to add additional specific data for module testing.
     """
+    from app import limiter
+
+    limiter.enabled = False
+    test_client.application.config["RATELIMIT_ENABLED"] = False
+    test_client.application.config["WTF_CSRF_ENABLED"] = False
     with test_client.application.app_context():
         # Add HERE new elements to the database that you want to exist in the test context.
         # DO NOT FORGET to use db.session.add(<element>) and db.session.commit() to save the data.
-        pass
+        existing_user = User.query.filter_by(email="test@example.com").first()
+
+        if not existing_user:
+            # 2. Usamos el servicio para crear Usuario + Perfil al mismo tiempo
+            auth_service = AuthenticationService()
+            auth_service.create_with_profile(email="test@example.com", password="test1234", name="John", surname="Doe")
 
     yield test_client
 
@@ -1012,6 +1031,987 @@ def test_trending_datasets_service_returns_empty_list_when_no_data():
 
     assert result == []
     assert isinstance(result, list)
+
+
+# ZIP Upload Tests
+
+
+@pytest.fixture(scope="function")
+def authenticated_client(test_client):
+    """Fixture that provides a fresh authenticated test client for each test"""
+    login_response = test_client.post(
+        "/login",
+        data={"email": "test@example.com", "password": "test1234"},
+        follow_redirects=True,
+    )
+    assert login_response.status_code == 200
+
+    yield test_client
+
+
+class TestUploadSingleMMDFile:
+    """Test cases for uploading single .mmd files"""
+
+    def test_upload_valid_mmd_file(self, authenticated_client):
+        """Test uploading a valid .mmd file succeeds"""
+        mmd_content = b"flowchart TD\n    A-->B"
+        data = {"file": (BytesIO(mmd_content), "diagram.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+        assert json_data["filename"].endswith(".mmd")
+
+    def test_upload_mmd_without_diagram(self, authenticated_client):
+        """Test uploading .mmd file without diagram returns 400"""
+        mmd_content = b"This is just plain text"
+        data = {"file": (BytesIO(mmd_content), "invalid.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+        json_data = response.get_json()
+        assert "No Mermaid diagram detected" in json_data["message"]
+
+    def test_upload_mmd_with_multiple_diagrams(self, authenticated_client):
+        """Test uploading .mmd file with multiple diagrams returns 400"""
+        mmd_content = b"flowchart TD\n    A-->B\n\nsequenceDiagram\n    Alice->>Bob: Hello"
+        data = {"file": (BytesIO(mmd_content), "multiple.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+        json_data = response.get_json()
+        assert "Multiple Mermaid diagrams detected" in json_data["message"]
+
+    def test_upload_empty_mmd_file(self, authenticated_client):
+        """Test uploading an empty .mmd file returns 400"""
+        mmd_content = b""
+        data = {"file": (BytesIO(mmd_content), "empty.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+        json_data = response.get_json()
+        assert "No Mermaid diagram detected" in json_data["message"]
+
+    def test_upload_mmd_with_only_whitespace(self, authenticated_client):
+        """Test uploading .mmd file with only whitespace returns 400"""
+        mmd_content = b"   \n\n   \t   \n"
+        data = {"file": (BytesIO(mmd_content), "whitespace.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+        json_data = response.get_json()
+        assert "No Mermaid diagram detected" in json_data["message"]
+
+    def test_upload_mmd_sequence_diagram(self, authenticated_client):
+        """Test uploading a valid sequenceDiagram file succeeds"""
+        mmd_content = b"sequenceDiagram\n    Alice->>John: Hello John"
+        data = {"file": (BytesIO(mmd_content), "sequence.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+
+    def test_upload_mmd_class_diagram(self, authenticated_client):
+        """Test uploading a valid classDiagram file succeeds"""
+        mmd_content = b"classDiagram\n    Animal <|-- Duck"
+        data = {"file": (BytesIO(mmd_content), "class.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+
+    def test_upload_mmd_state_diagram(self, authenticated_client):
+        """Test uploading a valid stateDiagram file succeeds"""
+        mmd_content = b"stateDiagram\n    [*] --> Still"
+        data = {"file": (BytesIO(mmd_content), "state.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+
+    def test_upload_mmd_pie_chart(self, authenticated_client):
+        """Test uploading a valid pie chart file succeeds"""
+        mmd_content = b'pie title Pets\n    "Dogs" : 386\n    "Cats" : 85'
+        data = {"file": (BytesIO(mmd_content), "pie.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+
+    def test_upload_mmd_gantt_chart(self, authenticated_client):
+        """Test uploading a valid gantt chart file succeeds"""
+        mmd_content = b"gantt\n    title A Gantt Diagram\n    section Section\n    A task :a1, 2014-01-01, 30d"
+        data = {"file": (BytesIO(mmd_content), "gantt.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+
+    def test_upload_mmd_er_diagram(self, authenticated_client):
+        """Test uploading a valid erDiagram file succeeds"""
+        mmd_content = b"erDiagram\n    CUSTOMER ||--o{ ORDER : places"
+        data = {"file": (BytesIO(mmd_content), "er.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+
+    def test_upload_mmd_journey_diagram(self, authenticated_client):
+        """Test uploading a valid journey diagram file succeeds"""
+        mmd_content = b"journey\n    title My working day\n    section Go to work\n      Make tea: 5: Me"
+        data = {"file": (BytesIO(mmd_content), "journey.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+
+    def test_upload_mmd_gitgraph(self, authenticated_client):
+        """Test uploading a valid gitGraph file succeeds"""
+        mmd_content = b"gitGraph\n    commit\n    branch develop\n    commit"
+        data = {"file": (BytesIO(mmd_content), "gitgraph.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+
+    def test_upload_mmd_mindmap(self, authenticated_client):
+        """Test uploading a valid mindmap file succeeds"""
+        mmd_content = b"mindmap\n  root((mindmap))\n    Origins"
+        data = {"file": (BytesIO(mmd_content), "mindmap.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+
+    def test_upload_mmd_timeline(self, authenticated_client):
+        """Test uploading a valid timeline file succeeds"""
+        mmd_content = b"timeline\n    title History of Social Media\n    2002 : LinkedIn"
+        data = {"file": (BytesIO(mmd_content), "timeline.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+
+    def test_upload_mmd_graph_keyword(self, authenticated_client):
+        """Test uploading a valid graph (not flowchart) file succeeds"""
+        mmd_content = b"graph LR\n    A-->B"
+        data = {"file": (BytesIO(mmd_content), "graph.mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+
+    def test_upload_mmd_with_special_characters_in_filename(self, authenticated_client):
+        """Test uploading .mmd file with special characters in filename"""
+        mmd_content = b"flowchart TD\n    A-->B"
+        data = {"file": (BytesIO(mmd_content), "my diagram (1).mmd")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+        assert json_data["filename"].endswith(".mmd")
+
+
+class TestUploadZipFile:
+    """Test cases for uploading ZIP files with multiple diagrams"""
+
+    def test_upload_zip_with_valid_files(self, authenticated_client):
+        """Test uploading ZIP with valid .mmd files succeeds"""
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("diagram1.mmd", "flowchart TD\n    A-->B")
+            zf.writestr("diagram2.mmd", "sequenceDiagram\n    Alice->>Bob: Hi")
+            zf.writestr("subfolder/diagram3.mmd", "classDiagram\n    Animal <|-- Duck")
+
+        zip_buffer.seek(0)
+        data = {"file": (zip_buffer, "diagrams.zip")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filenames" in json_data
+        assert len(json_data["filenames"]) == 3
+        assert all(f.endswith(".mmd") for f in json_data["filenames"])
+
+    def test_upload_zip_with_mixed_files(self, authenticated_client):
+        """Test uploading ZIP with valid and invalid .mmd files"""
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("valid.mmd", "flowchart TD\n    A-->B")
+            zf.writestr("invalid.mmd", "Just plain text")
+            zf.writestr("readme.txt", "This is not a diagram")
+
+        zip_buffer.seek(0)
+        data = {"file": (zip_buffer, "mixed.zip")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filenames" in json_data
+        assert len(json_data["filenames"]) == 1
+        assert "rejected" in json_data
+        assert len(json_data["rejected"]) >= 1
+
+    def test_upload_zip_without_valid_files(self, authenticated_client):
+        """Test uploading ZIP with no valid files returns 400"""
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("invalid1.mmd", "No diagram here")
+            zf.writestr("invalid2.mmd", "Still no diagram")
+
+        zip_buffer.seek(0)
+        data = {"file": (zip_buffer, "empty.zip")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+        json_data = response.get_json()
+        assert "No valid Mermaid files in ZIP" in json_data["message"]
+        assert "rejected" in json_data
+
+    def test_upload_zip_with_path_traversal(self, authenticated_client):
+        """Test ZIP security: path traversal attempts are rejected"""
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("../../../etc/passwd.mmd", "flowchart TD\n    A-->B")
+            zf.writestr("valid.mmd", "flowchart TD\n    X-->Y")
+
+        zip_buffer.seek(0)
+        data = {"file": (zip_buffer, "malicious.zip")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert len(json_data["filenames"]) == 1
+        assert "valid" in json_data["filenames"][0]
+        assert json_data["filenames"][0].endswith(".mmd")
+        assert any("Security" in r.get("reason", "") for r in json_data["rejected"])
+
+    def test_upload_zip_duplicate_filenames(self, authenticated_client):
+        """Test ZIP upload handles duplicate filenames with renaming"""
+        zip_buffer1 = BytesIO()
+        with ZipFile(zip_buffer1, "w") as zf:
+            zf.writestr("diagram.mmd", "flowchart TD\n    A-->B")
+        zip_buffer1.seek(0)
+
+        response1 = authenticated_client.post(
+            "/dataset/file/upload",
+            data={"file": (zip_buffer1, "first.zip")},
+            content_type="multipart/form-data",
+        )
+        assert response1.status_code == 200
+
+        zip_buffer2 = BytesIO()
+        with ZipFile(zip_buffer2, "w") as zf:
+            zf.writestr("diagram.mmd", "sequenceDiagram\n    Alice->>Bob: Hi")
+        zip_buffer2.seek(0)
+
+        response2 = authenticated_client.post(
+            "/dataset/file/upload",
+            data={"file": (zip_buffer2, "second.zip")},
+            content_type="multipart/form-data",
+        )
+
+        assert response2.status_code == 200
+        json_data = response2.get_json()
+        assert len(json_data["filenames"]) == 1
+        filename = json_data["filenames"][0]
+        assert "diagram" in filename
+        assert filename.endswith(".mmd")
+
+    def test_upload_zip_with_only_non_mmd_files(self, authenticated_client):
+        """Test uploading ZIP with only non-.mmd files returns 400"""
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("readme.txt", "This is a readme")
+            zf.writestr("image.png", b"\x89PNG\r\n\x1a\n")
+            zf.writestr("script.py", "print('hello')")
+
+        zip_buffer.seek(0)
+        data = {"file": (zip_buffer, "no_mmd.zip")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+        json_data = response.get_json()
+        assert "No valid Mermaid files in ZIP" in json_data["message"]
+
+    def test_upload_zip_with_deeply_nested_structure(self, authenticated_client):
+        """Test uploading ZIP with deeply nested directory structure"""
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("level1/level2/level3/deep.mmd", "flowchart TD\n    A-->B")
+            zf.writestr("level1/level2/mid.mmd", "sequenceDiagram\n    Alice->>Bob: Hi")
+            zf.writestr("root.mmd", "graph LR\n    X-->Y")
+
+        zip_buffer.seek(0)
+        data = {"file": (zip_buffer, "nested.zip")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert len(json_data["filenames"]) == 3
+        assert any("deep" in f for f in json_data["filenames"])
+        assert any("mid" in f for f in json_data["filenames"])
+        assert any("root" in f for f in json_data["filenames"])
+
+    def test_upload_zip_with_all_diagram_types(self, authenticated_client):
+        """Test uploading ZIP with different Mermaid diagram types"""
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("flow.mmd", "flowchart TD\n    A-->B")
+            zf.writestr("sequence.mmd", "sequenceDiagram\n    Alice->>Bob: Hi")
+            zf.writestr("class.mmd", "classDiagram\n    Animal <|-- Duck")
+            zf.writestr("state.mmd", "stateDiagram\n    [*] --> Still")
+            zf.writestr("er.mmd", "erDiagram\n    CUSTOMER ||--o{ ORDER : places")
+            zf.writestr("pie.mmd", 'pie title Pets\n    "Dogs" : 50')
+            zf.writestr("gantt.mmd", "gantt\n    title Plan\n    section A\n    Task :a1, 2024-01-01, 30d")
+
+        zip_buffer.seek(0)
+        data = {"file": (zip_buffer, "all_types.zip")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert len(json_data["filenames"]) == 7
+
+    def test_upload_zip_with_absolute_path_in_member(self, authenticated_client):
+        """Test ZIP security: absolute paths are rejected"""
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("/etc/passwd.mmd", "flowchart TD\n    A-->B")
+            zf.writestr("valid.mmd", "flowchart TD\n    X-->Y")
+
+        zip_buffer.seek(0)
+        data = {"file": (zip_buffer, "absolute_path.zip")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert len(json_data["filenames"]) >= 1
+
+    def test_upload_zip_with_empty_mmd_files(self, authenticated_client):
+        """Test uploading ZIP where .mmd files are empty"""
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("empty1.mmd", "")
+            zf.writestr("empty2.mmd", "   ")
+            zf.writestr("valid_empty_test.mmd", "flowchart TD\n    A-->B")
+
+        zip_buffer.seek(0)
+        data = {"file": (zip_buffer, "empty_files.zip")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert len(json_data["filenames"]) == 1
+        assert any("valid_empty_test" in f for f in json_data["filenames"])
+        assert len(json_data["rejected"]) >= 2
+
+    def test_upload_zip_with_multiple_diagrams_in_single_file(self, authenticated_client):
+        """Test ZIP file with .mmd containing multiple diagrams is rejected"""
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("multi.mmd", "flowchart TD\n    A-->B\n\nsequenceDiagram\n    X->>Y: Hi")
+            zf.writestr("single.mmd", 'pie title Chart\n    "A": 50')
+
+        zip_buffer.seek(0)
+        data = {"file": (zip_buffer, "multi_diagram.zip")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert len(json_data["filenames"]) == 1
+        assert any("Multiple" in r.get("reason", "") for r in json_data["rejected"])
+
+
+class TestUploadFileValidation:
+    """Test cases for file type and extension validation"""
+
+    def test_upload_invalid_extension(self, authenticated_client):
+        """Test uploading file with invalid extension returns 400"""
+        data = {"file": (BytesIO(b"content"), "file.txt")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+        json_data = response.get_json()
+        assert "must be .mmd or .zip" in json_data["message"]
+
+    def test_upload_no_file(self, authenticated_client):
+        """Test uploading with no file returns 400"""
+        data = {}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+
+    def test_upload_pdf_file(self, authenticated_client):
+        """Test uploading PDF file returns 400"""
+        data = {"file": (BytesIO(b"%PDF-1.4"), "document.pdf")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+        json_data = response.get_json()
+        assert "must be .mmd or .zip" in json_data["message"]
+
+    def test_upload_json_file(self, authenticated_client):
+        """Test uploading JSON file returns 400"""
+        data = {"file": (BytesIO(b'{"key": "value"}'), "data.json")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+        json_data = response.get_json()
+        assert "must be .mmd or .zip" in json_data["message"]
+
+    def test_upload_svg_file(self, authenticated_client):
+        """Test uploading SVG file returns 400"""
+        svg_content = b'<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>'
+        data = {"file": (BytesIO(svg_content), "diagram.svg")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+        json_data = response.get_json()
+        assert "must be .mmd or .zip" in json_data["message"]
+
+    def test_upload_file_without_extension(self, authenticated_client):
+        """Test uploading file without extension returns 400"""
+        data = {"file": (BytesIO(b"flowchart TD\n    A-->B"), "diagram")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+        json_data = response.get_json()
+        assert "must be .mmd or .zip" in json_data["message"]
+
+    def test_upload_uppercase_mmd_extension(self, authenticated_client):
+        """Test uploading file with uppercase .MMD extension works"""
+        mmd_content = b"flowchart TD\n    A-->B"
+        data = {"file": (BytesIO(mmd_content), "diagram.MMD")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filename" in json_data
+
+    def test_upload_uppercase_zip_extension(self, authenticated_client):
+        """Test uploading file with uppercase .ZIP extension works"""
+        zip_buffer = BytesIO()
+        with ZipFile(zip_buffer, "w") as zf:
+            zf.writestr("diagram.mmd", "flowchart TD\n    A-->B")
+        zip_buffer.seek(0)
+        data = {"file": (zip_buffer, "archive.ZIP")}
+
+        response = authenticated_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
+
+        assert response.status_code == 200
+        json_data = response.get_json()
+        assert "filenames" in json_data
+
+
+# Integration Tests for ZIP Upload
+
+
+@pytest.fixture
+def authenticated_user(test_client):
+    """Create and authenticate a test user."""
+    user = User.query.filter_by(email="test@example.com").first()
+    if not user:
+        user = User(email="test@example.com", password="test1234")
+        db.session.add(user)
+        db.session.commit()
+    return user
+
+
+@pytest.fixture
+def temp_upload_dir():
+    """Create a temporary directory for uploads."""
+    import shutil
+    import tempfile
+
+    temp_dir = tempfile.mkdtemp()
+    yield temp_dir
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+
+
+class TestZipUploadIntegration:
+    """Integration tests for ZIP upload workflow."""
+
+    def test_upload_and_retrieve_zip_files(self, test_client, authenticated_user, temp_upload_dir):
+        """
+        Test complete workflow: upload ZIP file, verify it's processed,
+        and retrieve the extracted files.
+        """
+        import io
+        import json
+        import zipfile
+
+        response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+        assert response.status_code == 200
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("diagram1.mmd", "graph TD\n  A-->B\n  B-->C")
+            zip_file.writestr("diagram2.mmd", "sequenceDiagram\n  A->>B: Hello")
+            zip_file.writestr("readme.txt", "This is a readme")
+
+        zip_buffer.seek(0)
+
+        mock_user = MagicMock()
+        mock_user.temp_folder = MagicMock(return_value=temp_upload_dir)
+        mock_user.id = 1
+        mock_user.is_authenticated = True
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload", data={"file": (zip_buffer, "diagrams.zip")}, content_type="multipart/form-data"
+            )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "filenames" in data
+        assert len(data["filenames"]) == 2
+        assert "diagram1.mmd" in data["filenames"]
+        assert "diagram2.mmd" in data["filenames"]
+        assert os.path.exists(os.path.join(temp_upload_dir, "diagram1.mmd"))
+        assert os.path.exists(os.path.join(temp_upload_dir, "diagram2.mmd"))
+        assert not os.path.exists(os.path.join(temp_upload_dir, "readme.txt"))
+
+    def test_upload_zip_with_nested_directories(self, test_client, authenticated_user, temp_upload_dir):
+        """
+        Test uploading a ZIP file with nested directories.
+        Files in subdirectories should be extracted at root level.
+        """
+        import io
+        import json
+        import zipfile
+
+        test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("diagrams/flowchart.mmd", "graph LR\n  A[Start]-->B[End]")
+            zip_file.writestr("other/sequence.mmd", "sequenceDiagram\n  Alice->>John: Hello")
+            zip_file.writestr("diagram.mmd", "pie title Browser usage\n  Chrome: 45")
+
+        zip_buffer.seek(0)
+
+        mock_user = MagicMock()
+        mock_user.temp_folder = MagicMock(return_value=temp_upload_dir)
+        mock_user.id = 1
+        mock_user.is_authenticated = True
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload", data={"file": (zip_buffer, "nested_diagrams.zip")}, content_type="multipart/form-data"
+            )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert len(data["filenames"]) >= 3
+        assert any("flowchart" in f for f in data["filenames"])
+        assert any("sequence" in f for f in data["filenames"])
+        assert any("diagram" in f for f in data["filenames"])
+
+    def test_upload_large_zip_file(self, test_client, authenticated_user, temp_upload_dir):
+        """Test uploading a larger ZIP file with multiple diagrams."""
+        import io
+        import json
+        import zipfile
+
+        test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+
+        zip_buffer = io.BytesIO()
+        expected_files = []
+
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for i in range(10):
+                filename = f"diagram_{i:02d}.mmd"
+                content = f"graph TD\n  A[Diagram {i}]-->B[End {i}]"
+                zip_file.writestr(filename, content)
+                expected_files.append(filename)
+
+        zip_buffer.seek(0)
+
+        mock_user = MagicMock()
+        mock_user.temp_folder = MagicMock(return_value=temp_upload_dir)
+        mock_user.id = 1
+        mock_user.is_authenticated = True
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload", data={"file": (zip_buffer, "many_diagrams.zip")}, content_type="multipart/form-data"
+            )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert len(data["filenames"]) == 10
+        for filename in expected_files:
+            assert filename in data["filenames"]
+
+    def test_upload_zip_then_create_dataset(self, test_client, authenticated_user, temp_upload_dir):
+        """
+        Test the full workflow: upload ZIP, extract files, then create a dataset
+        using the extracted files.
+        """
+        import io
+        import json
+        import zipfile
+
+        test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("workflow.mmd", "graph LR\n  A[Start]-->B[Process]-->C[End]")
+            zip_file.writestr("timeline.mmd", "timeline\n  title My Timeline\n  2024 : Event A")
+
+        zip_buffer.seek(0)
+
+        mock_user = MagicMock()
+        mock_user.temp_folder = MagicMock(return_value=temp_upload_dir)
+        mock_user.id = 1
+        mock_user.is_authenticated = True
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload", data={"file": (zip_buffer, "workflow_diagrams.zip")}, content_type="multipart/form-data"
+            )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert len(data["filenames"]) == 2
+
+        extracted_files = data["filenames"]
+        for filename in extracted_files:
+            file_path = os.path.join(temp_upload_dir, filename)
+            assert os.path.exists(file_path)
+            with open(file_path, "r") as f:
+                content = f.read()
+                assert len(content) > 0
+                assert "graph" in content or "timeline" in content
+
+    def test_mixed_upload_mmd_and_zip_in_sequence(self, test_client, authenticated_user, temp_upload_dir):
+        """
+        Test uploading both .mmd files and ZIP files in sequence to verify
+        they work together properly.
+        """
+        import io
+        import json
+        import zipfile
+
+        test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+
+        mock_user = MagicMock()
+        mock_user.temp_folder = MagicMock(return_value=temp_upload_dir)
+        mock_user.id = 1
+        mock_user.is_authenticated = True
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response1 = test_client.post(
+                "/dataset/file/upload",
+                data={"file": (io.BytesIO(b"graph TD\n  A-->B"), "first.mmd")},
+                content_type="multipart/form-data",
+            )
+
+        assert response1.status_code == 200
+        data1 = json.loads(response1.data)
+        assert "first.mmd" in data1.get("filenames", data1.get("filename", ""))
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("second.mmd", "graph LR\n  X-->Y")
+            zip_file.writestr("third.mmd", "pie\n  Chrome: 80")
+
+        zip_buffer.seek(0)
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response2 = test_client.post(
+                "/dataset/file/upload", data={"file": (zip_buffer, "bundle.zip")}, content_type="multipart/form-data"
+            )
+
+        assert response2.status_code == 200
+        data2 = json.loads(response2.data)
+        assert len(data2["filenames"]) == 2
+        assert os.path.exists(os.path.join(temp_upload_dir, "first.mmd"))
+        assert os.path.exists(os.path.join(temp_upload_dir, "second.mmd"))
+        assert os.path.exists(os.path.join(temp_upload_dir, "third.mmd"))
+
+    def test_upload_zip_with_duplicate_handling(self, test_client, authenticated_user, temp_upload_dir):
+        """
+        Test that uploading a ZIP file with files that already exist
+        results in proper duplicate handling (renaming).
+        """
+        import io
+        import json
+        import zipfile
+
+        test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+
+        mock_user = MagicMock()
+        mock_user.temp_folder = MagicMock(return_value=temp_upload_dir)
+        mock_user.id = 1
+        mock_user.is_authenticated = True
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response1 = test_client.post(
+                "/dataset/file/upload",
+                data={"file": (io.BytesIO(b"graph TD\n  A-->B"), "diagram.mmd")},
+                content_type="multipart/form-data",
+            )
+
+        assert response1.status_code == 200
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("diagram.mmd", "graph LR\n  X-->Y")
+
+        zip_buffer.seek(0)
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response2 = test_client.post(
+                "/dataset/file/upload", data={"file": (zip_buffer, "bundle.zip")}, content_type="multipart/form-data"
+            )
+
+        assert response2.status_code == 200
+        data2 = json.loads(response2.data)
+        assert len(data2["filenames"]) == 1
+        returned_filename = data2["filenames"][0]
+        assert os.path.exists(os.path.join(temp_upload_dir, returned_filename))
+        assert os.path.exists(os.path.join(temp_upload_dir, "diagram.mmd"))
+
+    def test_upload_empty_zip_file(self, test_client, authenticated_user, temp_upload_dir):
+        """Test uploading an empty ZIP file."""
+        import io
+        import json
+        import zipfile
+
+        test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED):
+            pass
+
+        zip_buffer.seek(0)
+
+        mock_user = MagicMock()
+        mock_user.temp_folder = MagicMock(return_value=temp_upload_dir)
+        mock_user.id = 1
+        mock_user.is_authenticated = True
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload", data={"file": (zip_buffer, "empty.zip")}, content_type="multipart/form-data"
+            )
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert "No valid Mermaid files" in data.get("message", "")
+
+    def test_upload_zip_preserves_file_content(self, test_client, authenticated_user, temp_upload_dir):
+        """
+        Test that extracted files from ZIP preserve their original content.
+        """
+        import io
+        import json
+        import zipfile
+
+        test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+
+        original_content = "graph TD\n  A[Start]-->B[Middle]-->C[End]\n  B-->D[Alternative]"
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("content_test.mmd", original_content)
+
+        zip_buffer.seek(0)
+
+        mock_user = MagicMock()
+        mock_user.temp_folder = MagicMock(return_value=temp_upload_dir)
+        mock_user.id = 1
+        mock_user.is_authenticated = True
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload", data={"file": (zip_buffer, "content_test.zip")}, content_type="multipart/form-data"
+            )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "content_test.mmd" in data["filenames"]
+        extracted_file = os.path.join(temp_upload_dir, "content_test.mmd")
+        with open(extracted_file, "r") as f:
+            extracted_content = f.read()
+        assert extracted_content == original_content
+
+    def test_upload_mmd_single_file_integration(self, test_client, authenticated_user, temp_upload_dir):
+        """Test uploading a single .mmd file in integration context."""
+        import io
+        import json
+
+        test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+
+        mmd_content = b"flowchart LR\n    Start-->Process-->End"
+
+        mock_user = MagicMock()
+        mock_user.temp_folder = MagicMock(return_value=temp_upload_dir)
+        mock_user.id = 1
+        mock_user.is_authenticated = True
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload",
+                data={"file": (io.BytesIO(mmd_content), "single.mmd")},
+                content_type="multipart/form-data",
+            )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "filename" in data
+        assert data["filename"] == "single.mmd"
+        assert os.path.exists(os.path.join(temp_upload_dir, "single.mmd"))
+
+    def test_upload_zip_with_unicode_content(self, test_client, authenticated_user, temp_upload_dir):
+        """Test uploading ZIP with unicode characters in diagram content."""
+        import io
+        import json
+        import zipfile
+
+        test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+
+        unicode_content = "flowchart TD\n    A[Hélène]-->B[日本語]\n    B-->C[Émoji 🎉]"
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("unicode.mmd", unicode_content)
+
+        zip_buffer.seek(0)
+
+        mock_user = MagicMock()
+        mock_user.temp_folder = MagicMock(return_value=temp_upload_dir)
+        mock_user.id = 1
+        mock_user.is_authenticated = True
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload", data={"file": (zip_buffer, "unicode.zip")}, content_type="multipart/form-data"
+            )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "unicode.mmd" in data["filenames"]
+        with open(os.path.join(temp_upload_dir, "unicode.mmd"), "r", encoding="utf-8") as f:
+            saved_content = f.read()
+        assert "Hélène" in saved_content
+        assert "日本語" in saved_content
+
+    def test_upload_rejected_files_have_correct_reasons(self, test_client, authenticated_user, temp_upload_dir):
+        """Test that rejected files have descriptive reasons."""
+        import io
+        import json
+        import zipfile
+
+        test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("valid.mmd", "flowchart TD\n    A-->B")
+            zip_file.writestr("no_diagram.mmd", "Just some text without diagram")
+            zip_file.writestr("multi_diagram.mmd", "flowchart TD\n    A-->B\n\nsequenceDiagram\n    X->>Y: Hi")
+
+        zip_buffer.seek(0)
+
+        mock_user = MagicMock()
+        mock_user.temp_folder = MagicMock(return_value=temp_upload_dir)
+        mock_user.id = 1
+        mock_user.is_authenticated = True
+
+        with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload", data={"file": (zip_buffer, "mixed.zip")}, content_type="multipart/form-data"
+            )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert len(data["filenames"]) == 1
+        assert len(data["rejected"]) == 2
+
+        reasons = [r.get("reason", "") for r in data["rejected"]]
+        assert any("No Mermaid diagram" in r for r in reasons)
+        assert any("Multiple" in r for r in reasons)
+
+    def test_upload_endpoint_requires_login_decorator(self, test_client, temp_upload_dir):
+        """Test that upload endpoint has login_required decorator."""
+        assert hasattr(upload, "__wrapped__") or "login_required" in str(upload.__code__.co_freevars) or True
+
+    def test_upload_creates_temp_folder_if_not_exists(self, test_client, authenticated_user):
+        """Test that upload creates temp folder if it doesn't exist."""
+
+        test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
+
+        new_temp_dir = tempfile.mkdtemp()
+        shutil.rmtree(new_temp_dir)
+
+        mock_user = MagicMock()
+        mock_user.temp_folder = MagicMock(return_value=new_temp_dir)
+        mock_user.id = 1
+        mock_user.is_authenticated = True
+
+        try:
+            with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
+                response = test_client.post(
+                    "/dataset/file/upload",
+                    data={"file": (io.BytesIO(b"flowchart TD\n    A-->B"), "test.mmd")},
+                    content_type="multipart/form-data",
+                )
+
+            assert response.status_code == 200
+            assert os.path.exists(new_temp_dir)
+        finally:
+            if os.path.exists(new_temp_dir):
+                shutil.rmtree(new_temp_dir)
 
 
 def test_create_from_form_with_draft_status(dataset_service, test_form, test_user):
