@@ -73,6 +73,18 @@ class DataSetService(BaseService):
     def get_unsynchronized_dataset(self, current_user_id: int, dataset_id: int) -> DataSet:
         return self.repository.get_unsynchronized_dataset(current_user_id, dataset_id)
 
+    def count_synchronized_datasets(self):
+        return self.repository.count_synchronized_datasets()
+
+    def count_unsynchronized_datasets(self):
+        return self.repository.count_unsynchronized_datasets()
+
+    def count_synchronized_datasets_for_user(self, current_user_id: int) -> int:
+        return self.repository.count_synchronized_datasets(current_user_id)
+
+    def count_unsynchronized_datasets_for_user(self, current_user_id: int) -> int:
+        return self.repository.count_unsynchronized_datasets(current_user_id)
+
     def latest_synchronized(self):
         datasets = self.repository.latest_synchronized()
         for dataset in datasets:
@@ -97,9 +109,6 @@ class DataSetService(BaseService):
     def get_download_count(self, dataset_id):
         count = db.session.query(func.count(DSDownloadRecord.id)).filter(DSDownloadRecord.dataset_id == dataset_id).scalar()
         return count or 0
-
-    def count_synchronized_datasets(self):
-        return self.repository.count_synchronized_datasets()
 
     def count_mermaid_diagrams(self):
         return self.mermaid_diagram_service.count_mermaid_diagrams()
