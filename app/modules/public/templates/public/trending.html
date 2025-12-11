@@ -1,0 +1,195 @@
+{% extends "base_template.html" %}
+
+{% block title %}Trending Datasets{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid p-0">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex align-items-center justify-content-between mb-4">
+                <h1 class="h2 mb-0">
+                    <i data-feather="trending-up" class="align-middle mr-2"></i>
+                    <b>Trending</b> Datasets
+                </h1>
+                <select id="trendingPeriodFilter" class="form-select form-select-lg" style="width: 200px; max-width: 200px;" onchange="changePeriodFilter()">
+                    <option value="week" selected>Last Week</option>
+                    <option value="month">Last Month</option>
+                    <option value="all_time">All Time</option>
+                </select>
+            </div>
+
+            <p class="text-muted">
+                Discover the most downloaded datasets based on community activity.
+            </p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12" id="trendingDatasetsContent">
+            <!-- Content will be loaded here -->
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentPeriod = 'week';
+    
+    function changePeriodFilter() {
+        currentPeriod = document.getElementById('trendingPeriodFilter').value;
+        loadTrendingDatasets(currentPeriod);
+    }
+
+    function loadTrendingDatasets(period) {
+        const container = document.getElementById('trendingDatasetsContent');
+        
+        // Show loading spinner
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `;
+
+        const limit = period === 'all_time' ? 10 : 20;
+        
+        fetch(`/datasets/trending?period=${period}&limit=${limit}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data.datasets.length > 0) {
+                    displayTrendingDatasets(data.data.datasets, period);
+                } else {
+                    showNoDatasets(period);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching trending datasets:', error);
+                showError();
+            });
+    }
+
+    function displayTrendingDatasets(datasets, period) {
+        const container = document.getElementById('trendingDatasetsContent');
+        const periodText = period === 'week' ? 'Last Week' : period === 'month' ? 'Last Month' : 'All Time';
+        
+        let html = `
+            <div class="alert alert-info mb-4">
+                <i data-feather="info" class="align-middle mr-2"></i>
+                Showing <strong>${datasets.length}</strong> trending datasets from <strong>${periodText}</strong>
+            </div>
+        `;
+
+        datasets.forEach((dataset, index) => {
+            const doiLink = dataset.doi || '#';
+            const downloadLink = `/dataset/download/${dataset.id}`;
+            const tags = dataset.tags ? dataset.tags.split(',').map(tag => 
+                `<span class="badge bg-secondary">${tag.trim()}</span>`
+            ).join(' ') : '';
+            
+            const rankBadge = index < 3 ? 
+                `<span class="badge bg-warning text-dark me-2" style="font-size: 1.2rem;">#${index + 1}</span>` : 
+                `<span class="text-muted me-2" style="font-size: 1rem;">#${index + 1}</span>`;
+
+            html += `
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <h2>
+                                ${rankBadge}
+                                <a href="${doiLink}">
+                                    ${dataset.title}
+                                </a>
+                            </h2>
+
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-secondary me-2">Downloads:</span>
+                                <i class="bi bi-download fs-5 text-primary"></i>
+                                <span class="badge bg-primary fs-6">${dataset.download_count}</span>
+                            </div>
+
+                            <div>
+                                <span class="badge bg-secondary">${dataset.diagram_type}</span>
+                            </div>
+                        </div>
+                        <p class="text-secondary">${dataset.created_at ? new Date(dataset.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}</p>
+
+                        <div class="row mb-2">
+                            <div class="col-12">
+                                <p class="card-text">${dataset.description || 'No description available'}</p>
+                            </div>
+                        </div>
+
+                        <div class="row mb-2">
+                            <div class="col-12">
+                                <a href="${doiLink}">${doiLink}</a>
+                                <i data-feather="clipboard" class="center-button-icon" style="cursor: pointer" onclick="copyText('trending_doi_${dataset.id}')"></i>
+                                <div id="trending_doi_${dataset.id}" style="display: none">${doiLink}</div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-2">
+                            <div class="col-12">
+                                ${tags || '<span class="text-muted">No tags</span>'}
+                            </div>
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <a href="${doiLink}" class="btn btn-outline-primary btn-sm" style="border-radius: 5px;">
+                                    <i data-feather="eye" class="center-button-icon"></i>
+                                    View dataset
+                                </a>
+                                <a href="${downloadLink}" class="btn btn-outline-primary btn-sm" style="border-radius: 5px;">
+                                    <i data-feather="download" class="center-button-icon"></i>
+                                    Download
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+        feather.replace();
+    }
+
+    function showNoDatasets(period) {
+        const container = document.getElementById('trendingDatasetsContent');
+        const periodText = period === 'week' ? 'last week' : period === 'month' ? 'last month' : 'all time';
+        
+        container.innerHTML = `
+            <div class="alert alert-warning">
+                <i data-feather="alert-circle" class="align-middle mr-2"></i>
+                No trending datasets available for ${periodText}.
+            </div>
+        `;
+        feather.replace();
+    }
+
+    function showError() {
+        const container = document.getElementById('trendingDatasetsContent');
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i data-feather="alert-triangle" class="align-middle mr-2"></i>
+                An error occurred while loading trending datasets. Please try again later.
+            </div>
+        `;
+        feather.replace();
+    }
+
+    // Load initial data on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadTrendingDatasets('week');
+    });
+</script>
+{% endblock %}

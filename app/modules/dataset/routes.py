@@ -703,7 +703,7 @@ def get_trending_datasets():
         period = request.args.get("period", "week", type=str).lower()
         limit = request.args.get("limit", 10, type=int)
 
-        valid_periods = ["week", "month"]
+        valid_periods = ["week", "month", "all_time"]
         if period not in valid_periods:
             return (
                 jsonify(

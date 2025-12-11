@@ -892,7 +892,7 @@ def test_get_period_days_invalid():
     with pytest.raises(ValueError) as excinfo:
         service._get_period_days("year")
     assert "Invalid period 'year'" in str(excinfo.value)
-    assert "Must be 'week' or 'month'" in str(excinfo.value)
+    assert "Must be 'week', 'month', or 'all_time'" in str(excinfo.value)
 
 
 def test_get_trending_datasets_calls_repository():

@@ -60,8 +60,9 @@ class ExploreRepository(BaseRepository):
         # Order by sorting parameter
         if sorting == "oldest":
             datasets.sort(key=lambda x: x.created_at)
-        elif sorting == "trending_week" or sorting == "trending_month":
-            period = "week" if sorting == "trending_week" else "month"
+        elif sorting in ["trending_week", "trending_month", "trending_all_time"]:
+            period_map = {"trending_week": "week", "trending_month": "month", "trending_all_time": "all_time"}
+            period = period_map[sorting]
             trending_service = TrendingDatasetsService()
             trending_tuples = trending_service.get_trending_datasets(limit=1000, period=period)
             trending_ids = [d[0].id for d in trending_tuples]  # d[0] is the DataSet
