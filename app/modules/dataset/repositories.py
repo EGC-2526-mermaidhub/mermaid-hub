@@ -125,17 +125,20 @@ class TrendingDatasetsRepository(BaseRepository):
     def __init__(self):
         super().__init__(DataSet)
 
-    def get_top_downloaded_datasets(self, limit: int = 10, period_days: int = 7) -> List[tuple]:
-        start_date = datetime.now(timezone.utc) - timedelta(days=period_days)
-
-        results = (
+    def get_top_downloaded_datasets(self, limit: int = 10, period_days: int = None) -> List[tuple]:
+        query = (
             self.model.query.join(DSMetaData, DataSet.ds_meta_data_id == DSMetaData.id)
             .join(DSDownloadRecord, DataSet.id == DSDownloadRecord.dataset_id)
-            .filter(
-                DSMetaData.dataset_doi.isnot(None),  # Only synchronized datasets
-                DSDownloadRecord.download_date >= start_date,  # Downloads within period
-            )
-            .with_entities(DataSet, func.count(DSDownloadRecord.id).label("download_count"))
+            .filter(DSMetaData.dataset_doi.isnot(None))  # Only synchronized datasets
+        )
+
+        # Apply period filter only if period_days is specified (None = all time)
+        if period_days is not None:
+            start_date = datetime.now(timezone.utc) - timedelta(days=period_days)
+            query = query.filter(DSDownloadRecord.download_date >= start_date)
+
+        results = (
+            query.with_entities(DataSet, func.count(DSDownloadRecord.id).label("download_count"))
             .group_by(DataSet.id)
             .order_by(desc("download_count"))
             .limit(limit)
@@ -144,7 +147,7 @@ class TrendingDatasetsRepository(BaseRepository):
 
         return results
 
-    def get_top_downloaded_datasets_metadata(self, limit: int = 10, period_days: int = 7) -> List[dict]:
+    def get_top_downloaded_datasets_metadata(self, limit: int = 10, period_days: int = None) -> List[dict]:
         results = self.get_top_downloaded_datasets(limit=limit, period_days=period_days)
 
         trending_datasets = []
@@ -164,6 +167,7 @@ class TrendingDatasetsRepository(BaseRepository):
                     "files_count": dataset.get_files_count(),
                     "total_size": dataset.get_file_total_size(),
                     "total_size_human": dataset.get_file_total_size_for_human(),
+                    "doi": dataset.get_mermaidhub_doi(),  # Add full URL for linking
                 }
             )
 
