@@ -669,14 +669,17 @@ def subdomain_index(doi):
 
     dataset.download_count = DSDownloadRecordService().get_download_count(dataset.id)
 
-    recommended = dataset_service.recommend_simple(dataset.id, top_n=3)
+    recommended = dataset_service.recommend_simple(dataset, top_n=3)
+
+    print(recommended)
 
     user_cookie = ds_view_record_service.create_cookie(dataset=dataset)
 
-    resp = make_response(render_template("dataset/view_dataset.html", dataset=dataset, recommended_datasets=recommended))
-
     form = PublishDatasetForm()
-    resp = make_response(render_template("dataset/view_dataset.html", dataset=dataset, form=form))
+    resp = make_response(render_template("dataset/view_dataset.html",
+                                         dataset=dataset,
+                                         recommended_datasets=recommended,
+                                         form=form))
 
     resp.set_cookie("view_cookie", user_cookie)
     return resp
