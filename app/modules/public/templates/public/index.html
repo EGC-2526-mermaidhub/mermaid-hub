@@ -11,6 +11,7 @@
     <select id="trendingPeriod" class="form-select form-select-sm" style="width: 140px; max-width: 140px;" onchange="changeTrendingPeriod()">
         <option value="week">Last Week</option>
         <option value="month">Last Month</option>
+        <option value="all_time">All Time</option>
     </select>
 </div>
 
@@ -24,7 +25,7 @@
                 <div class="d-flex align-items-center justify-content-between">
                     <h2>
 
-                        <a href="{{ dataset.dataset_doi }}">
+                        <a href="{{ dataset.doi }}">
                             {{ dataset.title }}
                         </a>
                     </h2>
@@ -76,9 +77,9 @@
                 <div class="row mb-2">
 
                     <div class="col-12">
-                        <a href="{{ dataset.dataset_doi }}">{{ dataset.dataset_doi }}</a>
+                        <a href="{{ dataset.doi }}">{{ dataset.doi }}</a>
                         <div id="trending_dataset_doi_{{ dataset.id }}" style="display: none">
-                            {{ dataset.dataset_doi }}
+                            {{ dataset.doi }}
                         </div>
 
                         <i data-feather="clipboard" class="center-button-icon" style="cursor: pointer"
@@ -101,7 +102,7 @@
 
                 <div class="row  mt-4">
                     <div class="col-12">
-                        <a href="{{ dataset.dataset_doi }}" class="btn btn-outline-primary btn-sm"
+                        <a href="{{ dataset.doi }}" class="btn btn-outline-primary btn-sm"
                             style="border-radius: 5px;">
                             <i data-feather="eye" class="center-button-icon"></i>
                             View dataset
@@ -424,7 +425,8 @@
 <script>
     function changeTrendingPeriod() {
         const period = document.getElementById('trendingPeriod').value;
-        fetch(`/datasets/trending?period=${period}&limit=5`)
+        const limit = period === 'all_time' ? 3 : 5;
+        fetch(`/datasets/trending?period=${period}&limit=${limit}`)
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.data.datasets.length > 0) {
