@@ -4,6 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from flask import url_for
+from wtforms import Form, BooleanField, StringField, TextAreaField, SubmitField
+from wtforms.validators import DataRequired
 
 from app.modules.dataset.models import DiagramType
 from app.modules.dataset.services import (
@@ -56,9 +58,14 @@ def test_user(tmp_path):
 
 @pytest.fixture
 def test_form(tmp_path):
-    class TestForm:
+    class TestForm(Form):
+        title = StringField("Title", validators=[DataRequired()])
+        desc = TextAreaField("Description", validators=[DataRequired()])
+        is_draft = BooleanField("Is Draft", default=False)
+        submit = SubmitField("Submit")
+
         def get_dsmetadata(self):
-            return {"title": "Dataset Title", "description": "Some desc"}
+            return {"title": self.title.data, "description": self.desc.data}
 
         def get_authors(self):
             return [{"name": "Alice", "affiliation": "Uni", "orcid": "1234"}]
@@ -78,6 +85,7 @@ def test_form(tmp_path):
 
     with open(tmp_path / "diagram.mmd", "wb") as f:
         f.write(b"data")
+
     return TestForm()
 
 
@@ -1004,3 +1012,280 @@ def test_trending_datasets_service_returns_empty_list_when_no_data():
 
     assert result == []
     assert isinstance(result, list)
+
+
+def test_create_from_form_with_draft_status(dataset_service, test_form, test_user):
+
+    ds_mock = MagicMock(id=1)
+    ds_meta_data_mock = MagicMock(is_draft=True)
+    ds_mock.ds_meta_data = ds_meta_data_mock
+
+    dataset_service.create = MagicMock(return_value=ds_mock)
+    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
+    dataset_service.repository.session.commit = MagicMock()
+
+    form_with_draft = test_form
+    form_with_draft.is_draft.data = True
+
+    result = dataset_service.create_from_form(form_with_draft, test_user, is_draft=True)
+
+    assert result == ds_mock
+    assert result.ds_meta_data.is_draft is True
+
+    dataset_service.repository.session.commit.assert_called_once()
+
+
+def test_is_draft_field_saved_correctly(dataset_service, test_form, test_user):
+
+    form_with_draft = test_form
+    form_with_draft.is_draft.data = True
+
+    ds_mock = MagicMock(id=1)
+    ds_meta_data_mock = MagicMock(is_draft=True)
+    ds_mock.ds_meta_data = ds_meta_data_mock
+
+    dataset_service.create = MagicMock(return_value=ds_mock)
+    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
+    dataset_service.repository.session.commit = MagicMock()
+
+    result = dataset_service.create_from_form(form_with_draft, test_user, is_draft=True)
+
+    assert result == ds_mock
+    assert result.ds_meta_data.is_draft is True
+
+    dataset_service.repository.session.commit.assert_called_once()
+
+
+def test_get_synchronized_datasets(dataset_service):
+
+    dataset_draft = MagicMock(ds_meta_data=MagicMock(is_draft=True))
+    dataset_published = MagicMock(ds_meta_data=MagicMock(is_draft=False))
+
+    dataset_service.repository.get_synchronized = MagicMock(return_value=[dataset_published])
+    dataset_service.repository.get_unsynchronized = MagicMock(return_value=[dataset_draft])
+
+    synced_datasets = dataset_service.repository.get_synchronized(1)
+    assert all(ds.ds_meta_data.is_draft is False for ds in synced_datasets)
+
+    unsynced_datasets = dataset_service.repository.get_unsynchronized(1)
+    assert all(ds.ds_meta_data.is_draft is True for ds in unsynced_datasets)
+
+
+def test_count_synchronized_and_unsynchronized_datasets(dataset_service):
+
+    MagicMock(ds_meta_data=MagicMock(is_draft=True))
+    MagicMock(ds_meta_data=MagicMock(is_draft=False))
+
+    dataset_service.repository.count_synchronized_datasets = MagicMock(return_value=1)
+    dataset_service.repository.count_unsynchronized_datasets = MagicMock(return_value=1)
+
+    count_synced = dataset_service.repository.count_synchronized_datasets()
+    count_unsynced = dataset_service.repository.count_unsynchronized_datasets()
+
+    assert count_synced == 1
+    assert count_unsynced == 1
+
+    dataset_service.repository.count_synchronized_datasets.assert_called_once()
+    dataset_service.repository.count_unsynchronized_datasets.assert_called_once()
+
+
+def test_is_draft_field_validation_on_form_submission(test_form):
+
+    form_with_invalid_draft = test_form
+    form_with_invalid_draft.is_draft.data = None
+
+    assert not form_with_invalid_draft.validate()
+
+    form_with_invalid_draft.is_draft.data = "invalid_value"
+
+    assert not form_with_invalid_draft.validate()
+
+
+def test_is_draft_field_in_form_validation(test_form):
+
+    form_with_draft = test_form
+    form_with_draft.is_draft.data = True
+
+    assert form_with_draft.is_draft.data is True
+
+    form_without_draft = test_form
+    form_without_draft.is_draft.data = False
+
+    assert form_without_draft.is_draft.data is False
+
+
+def test_create_from_form_with_default_draft_status(dataset_service, test_form, test_user):
+
+    ds_mock = MagicMock(id=1)
+    ds_meta_data_mock = MagicMock(is_draft=False)
+    ds_mock.ds_meta_data = ds_meta_data_mock
+
+    dataset_service.create = MagicMock(return_value=ds_mock)
+    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
+    dataset_service.repository.session.commit = MagicMock()
+
+    form_without_draft = test_form
+    form_without_draft.is_draft.data = False
+
+    result = dataset_service.create_from_form(form_without_draft, test_user)
+
+    assert result == ds_mock
+    assert result.ds_meta_data.is_draft is False
+
+    dataset_service.repository.session.commit.assert_called_once()
+
+
+def test_create_from_form_with_draft_false(dataset_service, test_form, test_user):
+
+    ds_mock = MagicMock(id=1)
+    ds_meta_data_mock = MagicMock(is_draft=False)
+    ds_mock.ds_meta_data = ds_meta_data_mock
+
+    dataset_service.create = MagicMock(return_value=ds_mock)
+    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
+    dataset_service.repository.session.commit = MagicMock()
+
+    form_with_draft_false = test_form
+    form_with_draft_false.is_draft.data = False
+
+    result = dataset_service.create_from_form(form_with_draft_false, test_user)
+
+    assert result == ds_mock
+    assert result.ds_meta_data.is_draft is False
+
+    dataset_service.repository.session.commit.assert_called_once()
+
+
+def test_create_from_form_with_draft_null(dataset_service, test_form, test_user):
+
+    ds_mock = MagicMock(id=1)
+    ds_meta_data_mock = MagicMock(is_draft=False)
+    ds_mock.ds_meta_data = ds_meta_data_mock
+
+    dataset_service.create = MagicMock(return_value=ds_mock)
+    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
+    dataset_service.repository.session.commit = MagicMock()
+
+    form_with_null_draft = test_form
+    form_with_null_draft.is_draft.data = None
+
+    result = dataset_service.create_from_form(form_with_null_draft, test_user)
+
+    assert result == ds_mock
+    assert result.ds_meta_data.is_draft is False
+
+    dataset_service.repository.session.commit.assert_called_once()
+
+
+def test_is_draft_field_validation_invalid_values(test_form):
+
+    form_with_invalid_draft = test_form
+
+    form_with_invalid_draft.is_draft.data = "not_a_boolean"
+
+    assert not form_with_invalid_draft.validate()
+
+    form_with_invalid_draft.is_draft.data = 123
+
+    assert not form_with_invalid_draft.validate()
+
+
+def test_combining_is_draft_with_other_attributes(dataset_service, test_form, test_user):
+
+    ds_mock = MagicMock(id=1)
+    ds_meta_data_mock = MagicMock(is_draft=True, title="Sample Dataset", description="Description")
+    ds_mock.ds_meta_data = ds_meta_data_mock
+
+    dataset_service.create = MagicMock(return_value=ds_mock)
+    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
+    dataset_service.repository.session.commit = MagicMock()
+
+    form_with_data = test_form
+    form_with_data.is_draft.data = True
+    form_with_data.title.data = "Sample Dataset"
+    form_with_data.desc.data = "Description"
+
+    result = dataset_service.create_from_form(form_with_data, test_user)
+
+    assert result.ds_meta_data.is_draft is True
+    assert result.ds_meta_data.title == "Sample Dataset"
+    assert result.ds_meta_data.description == "Description"
+
+
+def test_create_dataset_and_commit(dataset_service, test_form, test_user):
+
+    ds_mock = MagicMock(id=1)
+    ds_meta_data_mock = MagicMock(is_draft=True)
+    ds_mock.ds_meta_data = ds_meta_data_mock
+
+    dataset_service.create = MagicMock(return_value=ds_mock)
+    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
+    dataset_service.repository.session.commit = MagicMock()
+
+    form_with_draft = test_form
+    form_with_draft.is_draft.data = True
+
+    result = dataset_service.create_from_form(form_with_draft, test_user)
+
+    assert result.ds_meta_data.is_draft is True
+
+    dataset_service.repository.session.commit.assert_called_once()
+
+
+def test_count_datasets_by_draft_status(dataset_service):
+
+    dataset_service.repository.get_synchronized = MagicMock(return_value=[MagicMock(ds_meta_data=MagicMock(is_draft=False))])
+    dataset_service.repository.get_unsynchronized = MagicMock(return_value=[MagicMock(ds_meta_data=MagicMock(is_draft=True))])
+
+    dataset_service.repository.count_synchronized_datasets = MagicMock(return_value=1)
+    dataset_service.repository.count_unsynchronized_datasets = MagicMock(return_value=1)
+
+    synced_datasets = dataset_service.count_synchronized_datasets()
+    unsynced_datasets = dataset_service.count_unsynchronized_datasets()
+
+    assert synced_datasets == 1
+    assert unsynced_datasets == 1
+
+
+def test_file_count_and_size_after_publish(dataset_service):
+
+    zenodo_service_mock = MagicMock()
+    zenodo_service_mock.publish_dataset.return_value = MagicMock(
+        publication_doi="10.5281/fakenodo.123456", dataset_doi="10.5281/fakenodo.654321", deposition_id=1
+    )
+
+    dataset_service.zenodo_service = zenodo_service_mock
+
+    dataset_service.db = MagicMock()
+    dataset_service.db.session.commit = MagicMock()
+
+    dataset_mock = MagicMock()
+    dataset_mock.mermaid_diagrams = [MagicMock(files=[MagicMock(size=1024)]), MagicMock(files=[MagicMock(size=2048)])]
+
+    dataset_service.publish(dataset_mock)
+
+    total_size = sum(file.size for diagram in dataset_mock.mermaid_diagrams for file in diagram.files)
+    file_count = sum(len(diagram.files) for diagram in dataset_mock.mermaid_diagrams)
+
+    assert total_size == 3072
+    assert file_count == 2
+
+    dataset_service.db.session.commit.assert_called_once()
+
+
+def test_create_dataset_with_missing_is_draft(dataset_service, test_form, test_user):
+
+    form = test_form
+    form.is_draft.data = None
+
+    ds_mock = MagicMock(id=1)
+    ds_meta_data_mock = MagicMock(is_draft=False)
+    ds_mock.ds_meta_data = ds_meta_data_mock
+
+    dataset_service.create = MagicMock(return_value=ds_mock)
+    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
+    dataset_service.repository.session.commit = MagicMock()
+
+    result = dataset_service.create_from_form(form, test_user)
+
+    assert result.ds_meta_data.is_draft is False
