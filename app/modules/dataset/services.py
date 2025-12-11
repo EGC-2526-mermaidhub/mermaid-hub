@@ -330,16 +330,22 @@ class TrendingDatasetsService(BaseService):
     def get_monthly_trending_datasets(self, limit: int = 10) -> list:
         return self.get_trending_datasets(limit=limit, period="month")
 
+    def get_all_time_trending_datasets(self, limit: int = 10) -> list:
+        return self.get_trending_datasets(limit=limit, period="all_time")
+
     def get_weekly_trending_datasets_metadata(self, limit: int = 10) -> list:
         return self.get_trending_datasets_metadata(limit=limit, period="week")
 
     def get_monthly_trending_datasets_metadata(self, limit: int = 10) -> list:
         return self.get_trending_datasets_metadata(limit=limit, period="month")
 
+    def get_all_time_trending_datasets_metadata(self, limit: int = 10) -> list:
+        return self.get_trending_datasets_metadata(limit=limit, period="all_time")
+
     def _get_period_days(self, period: str) -> int:
-        period_mapping = {"week": 7, "month": 30}
+        period_mapping = {"week": 7, "month": 30, "all_time": None}
 
         if period not in period_mapping:
-            raise ValueError(f"Invalid period '{period}'. Must be 'week' or 'month'.")
+            raise ValueError(f"Invalid period '{period}'. Must be 'week', 'month', or 'all_time'.")
 
         return period_mapping[period]
