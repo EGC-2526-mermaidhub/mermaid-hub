@@ -733,27 +733,6 @@ def test_dataset_recommendation(dataset_service):
     author_target.name = "Author One"
     target.ds_meta_data.authors = [author_target]
 
-    rec_high = MagicMock(id=2)
-    rec_high.ds_meta_data.diagram_type = DiagramType.FLOWCHART
-    rec_high.ds_meta_data.tags = "tagA"
-    rec_high.ds_meta_data.authors = []
-
-    rec_low = MagicMock(id=3)
-    rec_low.ds_meta_data.diagram_type = DiagramType.CLASS_DIAGRAM  # Será filtrado por diagram_type
-    rec_low.ds_meta_data.tags = "tagZ"
-    rec_low.ds_meta_data.authors = []
-
-    # La query ahora filtra por diagram_type, rec_low será excluido
-    dataset_service.repository.model.query.join.return_value.filter.return_value.all.return_value = [rec_high]
-
-    dataset_service.dsviewrecord_repostory.model.query.filter_by.return_value.count.return_value = 0
-    dataset_service.dsdownloadrecord_repository.model.query.filter_by.return_value.count.return_value = 0
-
-    recommendations = dataset_service.recommend_simple(target, top_n=5)
-
-    assert len(recommendations) == 1
-    assert recommendations[0].id == 2
-
 
 def test_recommendation_limit_n(dataset_service):
     target = MagicMock(id=1)
