@@ -156,3 +156,102 @@ def test_recommendations_block_is_visible():
 
     finally:
         close_driver(driver)
+
+
+def test_github_import_form_visible():
+    """Test that the GitHub import form is visible and interactive on the upload page."""
+    driver = initialize_driver()
+    try:
+        host = get_host_for_selenium_testing()
+
+        driver.get(f"{host}/login")
+        wait_for_page_to_load(driver)
+        driver.find_element(By.NAME, "email").send_keys("user1@example.com")
+        driver.find_element(By.NAME, "password").send_keys("1234")
+        driver.find_element(By.NAME, "password").send_keys(Keys.RETURN)
+        wait_for_page_to_load(driver)
+        time.sleep(2)
+
+        driver.get(f"{host}/dataset/upload")
+        wait_for_page_to_load(driver)
+        time.sleep(2)
+
+        github_dropdown = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "githubImportDropdown")))
+        assert github_dropdown.is_displayed(), "GitHub Import button should be visible"
+        github_dropdown.click()
+        time.sleep(1)
+
+        dropdown_menu = driver.find_element(By.CSS_SELECTOR, ".dropdown-menu[aria-labelledby='githubImportDropdown']")
+        assert dropdown_menu.is_displayed(), "GitHub import dropdown menu should be visible after click"
+
+        repo_input = driver.find_element(By.ID, "github_repo")
+        branch_input = driver.find_element(By.ID, "github_branch")
+        path_input = driver.find_element(By.ID, "github_path")
+        token_input = driver.find_element(By.ID, "github_token")
+
+        assert repo_input.is_displayed(), "Repository URL input should be visible"
+        assert branch_input.is_displayed(), "Branch input should be visible"
+        assert path_input.is_displayed(), "Path input should be visible"
+        assert token_input.is_displayed(), "Token input should be visible"
+
+        submit_button = driver.find_element(By.CSS_SELECTOR, "#githubImportForm button[type='submit']")
+        assert submit_button.is_displayed(), "Load files button should be visible"
+        assert submit_button.text == "Load files", "Button text should be 'Load files'"
+
+        close_button = driver.find_element(By.ID, "githubImportClose")
+        close_button.click()
+        time.sleep(1)
+
+        assert not dropdown_menu.is_displayed(), "Dropdown should be closed after clicking Close button"
+
+        print("[SUCCESS] GitHub import form test passed")
+
+    finally:
+        close_driver(driver)
+
+
+def test_github_import_invalid_url_error():
+    """Test that submitting an invalid GitHub URL shows an error message."""
+    driver = initialize_driver()
+    try:
+        host = get_host_for_selenium_testing()
+
+        driver.get(f"{host}/login")
+        wait_for_page_to_load(driver)
+        driver.find_element(By.NAME, "email").send_keys("user1@example.com")
+        driver.find_element(By.NAME, "password").send_keys("1234")
+        driver.find_element(By.NAME, "password").send_keys(Keys.RETURN)
+        wait_for_page_to_load(driver)
+        time.sleep(2)
+
+        driver.get(f"{host}/dataset/upload")
+        wait_for_page_to_load(driver)
+        time.sleep(2)
+
+        github_dropdown = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "githubImportDropdown")))
+        github_dropdown.click()
+        time.sleep(1)
+
+        repo_input = driver.find_element(By.ID, "github_repo")
+        repo_input.clear()
+        repo_input.send_keys("https://invalid-url.com/not-github")
+
+        submit_button = driver.find_element(By.CSS_SELECTOR, "#githubImportForm button[type='submit']")
+        submit_button.click()
+        time.sleep(2)
+
+        try:
+            alert_element = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".toast, .alert, #alerts"))
+            )
+            if alert_element.is_displayed():
+                print(f"[INFO] Alert message found: {alert_element.text}")
+        except TimeoutException:
+            print("[INFO] No toast/alert found, checking page content")
+
+        assert "/dataset/upload" in driver.current_url, "Should remain on upload page after invalid URL submission"
+
+        print("[SUCCESS] GitHub import invalid URL error test passed")
+
+    finally:
+        close_driver(driver)

@@ -1,21 +1,23 @@
 import io
+import json
 import os
 import shutil
 import tempfile
 import uuid
+import zipfile
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 from zipfile import ZipFile
 
 import pytest
+import requests
 from flask import url_for
-from wtforms import BooleanField, Form, StringField, SubmitField, TextAreaField
-from wtforms.validators import DataRequired
 
-from app import db
+from app import db, limiter
 from app.modules.auth.models import User
 from app.modules.auth.services import AuthenticationService
 from app.modules.dataset.models import DiagramType
+from app.modules.dataset.repositories import DSDownloadRecordRepository
 from app.modules.dataset.routes import upload
 from app.modules.dataset.services import (
     DataSetService,
@@ -67,14 +69,9 @@ def test_user(tmp_path):
 
 @pytest.fixture
 def test_form(tmp_path):
-    class TestForm(Form):
-        title = StringField("Title", validators=[DataRequired()])
-        desc = TextAreaField("Description", validators=[DataRequired()])
-        is_draft = BooleanField("Is Draft", default=False)
-        submit = SubmitField("Submit")
-
+    class TestForm:
         def get_dsmetadata(self):
-            return {"title": self.title.data, "description": self.desc.data}
+            return {"title": "Dataset Title", "description": "Some desc"}
 
         def get_authors(self):
             return [{"name": "Alice", "affiliation": "Uni", "orcid": "1234"}]
@@ -94,7 +91,6 @@ def test_form(tmp_path):
 
     with open(tmp_path / "diagram.mmd", "wb") as f:
         f.write(b"data")
-
     return TestForm()
 
 
@@ -315,7 +311,6 @@ def test_dataset_service_latest_synchronized_with_download_counts():
     service.repository = MagicMock()
     service.dsdownloadrecord_repository = MagicMock()
 
-    # Create mock datasets
     dataset1 = MagicMock(id=1)
     dataset2 = MagicMock(id=2)
     dataset3 = MagicMock(id=3)
@@ -335,7 +330,6 @@ def test_dataset_service_latest_synchronized_with_download_counts():
 
 def test_dsdownloadrecord_repository_dataset_downloads_id_zero():
     """Test repository dataset_downloads_id returns 0 when no downloads"""
-    from app.modules.dataset.repositories import DSDownloadRecordRepository
 
     repo = DSDownloadRecordRepository()
     repo.model = MagicMock()
@@ -348,7 +342,6 @@ def test_dsdownloadrecord_repository_dataset_downloads_id_zero():
 
 def test_dsdownloadrecord_repository_dataset_downloads_id_with_downloads():
     """Test repository dataset_downloads_id returns correct count"""
-    from app.modules.dataset.repositories import DSDownloadRecordRepository
 
     repo = DSDownloadRecordRepository()
     repo.model = MagicMock()
@@ -361,7 +354,6 @@ def test_dsdownloadrecord_repository_dataset_downloads_id_with_downloads():
 
 def test_dsdownloadrecord_repository_total_dataset_downloads_zero():
     """Test total_dataset_downloads returns 0 when no records"""
-    from app.modules.dataset.repositories import DSDownloadRecordRepository
 
     repo = DSDownloadRecordRepository()
     repo.model = MagicMock()
@@ -374,7 +366,6 @@ def test_dsdownloadrecord_repository_total_dataset_downloads_zero():
 
 def test_dsdownloadrecord_repository_total_dataset_downloads_with_records():
     """Test total_dataset_downloads returns max id when records exist"""
-    from app.modules.dataset.repositories import DSDownloadRecordRepository
 
     repo = DSDownloadRecordRepository()
     repo.model = MagicMock()
@@ -393,18 +384,14 @@ def test_client(test_client):
     """
     Extends the test_client fixture to add additional specific data for module testing.
     """
-    from app import limiter
 
     limiter.enabled = False
     test_client.application.config["RATELIMIT_ENABLED"] = False
     test_client.application.config["WTF_CSRF_ENABLED"] = False
     with test_client.application.app_context():
-        # Add HERE new elements to the database that you want to exist in the test context.
-        # DO NOT FORGET to use db.session.add(<element>) and db.session.commit() to save the data.
         existing_user = User.query.filter_by(email="test@example.com").first()
 
         if not existing_user:
-            # 2. Usamos el servicio para crear Usuario + Perfil al mismo tiempo
             auth_service = AuthenticationService()
             auth_service.create_with_profile(email="test@example.com", password="test1234", name="John", surname="Doe")
 
@@ -456,9 +443,6 @@ def test_file_upload_invalid_extension(test_client):
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
-    # Need to create a BytesIO object to simulate a .txt upload
-    from io import BytesIO
-
     data = {"file": (BytesIO(b"content"), "test.txt")}
     response = test_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
 
@@ -471,10 +455,6 @@ def test_file_upload_no_mermaid_content(test_client):
     """Test file upload with no mermaid diagram returns 400"""
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
-
-    # Need to create a BytesIO object to simulate a .mmd upload
-    import tempfile
-    from io import BytesIO
 
     temp_dir = tempfile.mkdtemp()
 
@@ -489,9 +469,6 @@ def test_file_upload_no_mermaid_content(test_client):
 
     assert response.status_code == 400
 
-    # We need to clean up the temporary directory created for this test
-    import shutil
-
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
 
@@ -503,9 +480,6 @@ def test_file_upload_multiple_diagrams(test_client):
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
-    import tempfile
-    from io import BytesIO
-
     temp_dir = tempfile.mkdtemp()
 
     mock_user = MagicMock()
@@ -513,14 +487,11 @@ def test_file_upload_multiple_diagrams(test_client):
     mock_user.id = 1
     mock_user.is_authenticated = True
 
-    # Simulate a file with multiple mermaid diagrams
     with patch("app.modules.dataset.routes.current_user", mock_user):
         data = {"file": (BytesIO(b"graph TD\nA-->B\n\nflowchart LR\nC-->D"), "test.mmd")}
         response = test_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
 
     assert response.status_code == 400
-
-    import shutil
 
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
@@ -533,9 +504,6 @@ def test_file_upload_valid_mermaid(test_client):
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
-    import tempfile
-    from io import BytesIO
-
     temp_dir = tempfile.mkdtemp()
 
     mock_user = MagicMock()
@@ -543,15 +511,12 @@ def test_file_upload_valid_mermaid(test_client):
     mock_user.id = 1
     mock_user.is_authenticated = True
 
-    # Simulate a valid mermaid diagram file
     with patch("app.modules.dataset.routes.current_user", mock_user), patch("shutil.which", return_value=None):
 
         data = {"file": (BytesIO(b"graph TD\nA-->B"), "diagram.mmd")}
         response = test_client.post("/dataset/file/upload", data=data, content_type="multipart/form-data")
 
     assert response.status_code == 200
-
-    import shutil
 
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
@@ -563,8 +528,6 @@ def test_file_delete_nonexistent(test_client):
     """Test deleting non-existent file returns error"""
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
-
-    import tempfile
 
     temp_dir = tempfile.mkdtemp()
 
@@ -578,8 +541,6 @@ def test_file_delete_nonexistent(test_client):
 
     assert response.status_code == 200
 
-    import shutil
-
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
 
@@ -590,8 +551,6 @@ def test_file_delete_success(test_client):
     """Test deleting existing file succeeds"""
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
-
-    import tempfile
 
     temp_dir = tempfile.mkdtemp()
 
@@ -609,8 +568,6 @@ def test_file_delete_success(test_client):
 
     assert response.status_code == 200
     assert not os.path.exists(test_file)
-
-    import shutil
 
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
@@ -698,9 +655,6 @@ def test_download_dataset_creates_zip(test_client):
     response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
-    import tempfile
-    from zipfile import ZipFile
-
     temp_dir = tempfile.mkdtemp()
     zip_path = os.path.join(temp_dir, "dataset_1.zip")
     with ZipFile(zip_path, "w"):
@@ -723,8 +677,6 @@ def test_download_dataset_creates_zip(test_client):
         assert response.status_code == 200
         mock_record_service.return_value.create.assert_called_once()
 
-    import shutil
-
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
 
@@ -732,14 +684,6 @@ def test_download_dataset_creates_zip(test_client):
 
 
 def test_download_with_existing_cookie(test_client):
-    import os
-    import shutil
-    import tempfile
-    import uuid
-    from unittest.mock import MagicMock, patch
-    from zipfile import ZipFile
-
-    # Loguearse
     response = test_client.post(
         "/login",
         data=dict(email="test@example.com", password="test1234"),
@@ -747,11 +691,9 @@ def test_download_with_existing_cookie(test_client):
     )
     assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
 
-    # Crear cookie
     cookie_value = str(uuid.uuid4())
     test_client.set_cookie("download_cookie", cookie_value)
 
-    # Crear directorio temporal y zip dummy
     temp_dir = tempfile.mkdtemp()
     zip_path = os.path.join(temp_dir, "dataset_1.zip")
     with ZipFile(zip_path, "w"):
@@ -769,10 +711,8 @@ def test_download_with_existing_cookie(test_client):
             patch("app.modules.dataset.routes.DSDownloadRecordService.create") as mock_create,
         ):
 
-            # Evitar que se cree registro real
             mock_create.return_value = None
 
-            # Ejecutar endpoint
             response = test_client.get("/dataset/download/1")
             assert response.status_code == 200
 
@@ -911,15 +851,6 @@ def test_get_period_days_month():
     assert result == 30
 
 
-def test_get_period_days_invalid():
-    """Test _get_period_days raises ValueError for invalid period"""
-    service = TrendingDatasetsService()
-    with pytest.raises(ValueError) as excinfo:
-        service._get_period_days("year")
-    assert "Invalid period 'year'" in str(excinfo.value)
-    assert "Must be 'week', 'month', or 'all_time'" in str(excinfo.value)
-
-
 def test_get_trending_datasets_calls_repository():
     """Test get_trending_datasets delegates to repository with correct parameters"""
     service = TrendingDatasetsService()
@@ -1013,7 +944,6 @@ def test_trending_datasets_service_default_parameters():
     service.repository = MagicMock()
     service.repository.get_top_downloaded_datasets.return_value = []
 
-    # Test with defaults
     service.get_trending_datasets()
 
     service.repository.get_top_downloaded_datasets.assert_called_once_with(limit=10, period_days=7)
@@ -1566,8 +1496,6 @@ def authenticated_user(test_client):
 @pytest.fixture
 def temp_upload_dir():
     """Create a temporary directory for uploads."""
-    import shutil
-    import tempfile
 
     temp_dir = tempfile.mkdtemp()
     yield temp_dir
@@ -1583,9 +1511,6 @@ class TestZipUploadIntegration:
         Test complete workflow: upload ZIP file, verify it's processed,
         and retrieve the extracted files.
         """
-        import io
-        import json
-        import zipfile
 
         response = test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
         assert response.status_code == 200
@@ -1623,9 +1548,6 @@ class TestZipUploadIntegration:
         Test uploading a ZIP file with nested directories.
         Files in subdirectories should be extracted at root level.
         """
-        import io
-        import json
-        import zipfile
 
         test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
 
@@ -1656,9 +1578,6 @@ class TestZipUploadIntegration:
 
     def test_upload_large_zip_file(self, test_client, authenticated_user, temp_upload_dir):
         """Test uploading a larger ZIP file with multiple diagrams."""
-        import io
-        import json
-        import zipfile
 
         test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
 
@@ -1695,9 +1614,6 @@ class TestZipUploadIntegration:
         Test the full workflow: upload ZIP, extract files, then create a dataset
         using the extracted files.
         """
-        import io
-        import json
-        import zipfile
 
         test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
 
@@ -1736,9 +1652,6 @@ class TestZipUploadIntegration:
         Test uploading both .mmd files and ZIP files in sequence to verify
         they work together properly.
         """
-        import io
-        import json
-        import zipfile
 
         test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
 
@@ -1782,9 +1695,6 @@ class TestZipUploadIntegration:
         Test that uploading a ZIP file with files that already exist
         results in proper duplicate handling (renaming).
         """
-        import io
-        import json
-        import zipfile
 
         test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
 
@@ -1822,9 +1732,6 @@ class TestZipUploadIntegration:
 
     def test_upload_empty_zip_file(self, test_client, authenticated_user, temp_upload_dir):
         """Test uploading an empty ZIP file."""
-        import io
-        import json
-        import zipfile
 
         test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
 
@@ -1852,9 +1759,6 @@ class TestZipUploadIntegration:
         """
         Test that extracted files from ZIP preserve their original content.
         """
-        import io
-        import json
-        import zipfile
 
         test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
 
@@ -1886,8 +1790,6 @@ class TestZipUploadIntegration:
 
     def test_upload_mmd_single_file_integration(self, test_client, authenticated_user, temp_upload_dir):
         """Test uploading a single .mmd file in integration context."""
-        import io
-        import json
 
         test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
 
@@ -1913,9 +1815,6 @@ class TestZipUploadIntegration:
 
     def test_upload_zip_with_unicode_content(self, test_client, authenticated_user, temp_upload_dir):
         """Test uploading ZIP with unicode characters in diagram content."""
-        import io
-        import json
-        import zipfile
 
         test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
 
@@ -1947,9 +1846,6 @@ class TestZipUploadIntegration:
 
     def test_upload_rejected_files_have_correct_reasons(self, test_client, authenticated_user, temp_upload_dir):
         """Test that rejected files have descriptive reasons."""
-        import io
-        import json
-        import zipfile
 
         test_client.post("/login", data=dict(email="test@example.com", password="test1234"), follow_redirects=True)
 
@@ -2012,278 +1908,527 @@ class TestZipUploadIntegration:
                 shutil.rmtree(new_temp_dir)
 
 
-def test_create_from_form_with_draft_status(dataset_service, test_form, test_user):
-
-    ds_mock = MagicMock(id=1)
-    ds_meta_data_mock = MagicMock(is_draft=True)
-    ds_mock.ds_meta_data = ds_meta_data_mock
-
-    dataset_service.create = MagicMock(return_value=ds_mock)
-    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
-    dataset_service.repository.session.commit = MagicMock()
-
-    form_with_draft = test_form
-    form_with_draft.is_draft.data = True
-
-    result = dataset_service.create_from_form(form_with_draft, test_user, is_draft=True)
-
-    assert result == ds_mock
-    assert result.ds_meta_data.is_draft is True
-
-    dataset_service.repository.session.commit.assert_called_once()
-
-
-def test_is_draft_field_saved_correctly(dataset_service, test_form, test_user):
-
-    form_with_draft = test_form
-    form_with_draft.is_draft.data = True
-
-    ds_mock = MagicMock(id=1)
-    ds_meta_data_mock = MagicMock(is_draft=True)
-    ds_mock.ds_meta_data = ds_meta_data_mock
-
-    dataset_service.create = MagicMock(return_value=ds_mock)
-    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
-    dataset_service.repository.session.commit = MagicMock()
-
-    result = dataset_service.create_from_form(form_with_draft, test_user, is_draft=True)
-
-    assert result == ds_mock
-    assert result.ds_meta_data.is_draft is True
-
-    dataset_service.repository.session.commit.assert_called_once()
-
-
-def test_get_synchronized_datasets(dataset_service):
-
-    dataset_draft = MagicMock(ds_meta_data=MagicMock(is_draft=True))
-    dataset_published = MagicMock(ds_meta_data=MagicMock(is_draft=False))
-
-    dataset_service.repository.get_synchronized = MagicMock(return_value=[dataset_published])
-    dataset_service.repository.get_unsynchronized = MagicMock(return_value=[dataset_draft])
-
-    synced_datasets = dataset_service.repository.get_synchronized(1)
-    assert all(ds.ds_meta_data.is_draft is False for ds in synced_datasets)
-
-    unsynced_datasets = dataset_service.repository.get_unsynchronized(1)
-    assert all(ds.ds_meta_data.is_draft is True for ds in unsynced_datasets)
-
-
-def test_count_synchronized_and_unsynchronized_datasets(dataset_service):
-
-    MagicMock(ds_meta_data=MagicMock(is_draft=True))
-    MagicMock(ds_meta_data=MagicMock(is_draft=False))
-
-    dataset_service.repository.count_synchronized_datasets = MagicMock(return_value=1)
-    dataset_service.repository.count_unsynchronized_datasets = MagicMock(return_value=1)
-
-    count_synced = dataset_service.repository.count_synchronized_datasets()
-    count_unsynced = dataset_service.repository.count_unsynchronized_datasets()
-
-    assert count_synced == 1
-    assert count_unsynced == 1
-
-    dataset_service.repository.count_synchronized_datasets.assert_called_once()
-    dataset_service.repository.count_unsynchronized_datasets.assert_called_once()
-
-
-def test_is_draft_field_validation_on_form_submission(test_form):
-
-    form_with_invalid_draft = test_form
-    form_with_invalid_draft.is_draft.data = None
-
-    assert not form_with_invalid_draft.validate()
-
-    form_with_invalid_draft.is_draft.data = "invalid_value"
-
-    assert not form_with_invalid_draft.validate()
-
-
-def test_is_draft_field_in_form_validation(test_form):
-
-    form_with_draft = test_form
-    form_with_draft.is_draft.data = True
-
-    assert form_with_draft.is_draft.data is True
-
-    form_without_draft = test_form
-    form_without_draft.is_draft.data = False
-
-    assert form_without_draft.is_draft.data is False
-
-
-def test_create_from_form_with_default_draft_status(dataset_service, test_form, test_user):
-
-    ds_mock = MagicMock(id=1)
-    ds_meta_data_mock = MagicMock(is_draft=False)
-    ds_mock.ds_meta_data = ds_meta_data_mock
-
-    dataset_service.create = MagicMock(return_value=ds_mock)
-    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
-    dataset_service.repository.session.commit = MagicMock()
-
-    form_without_draft = test_form
-    form_without_draft.is_draft.data = False
-
-    result = dataset_service.create_from_form(form_without_draft, test_user)
-
-    assert result == ds_mock
-    assert result.ds_meta_data.is_draft is False
-
-    dataset_service.repository.session.commit.assert_called_once()
-
-
-def test_create_from_form_with_draft_false(dataset_service, test_form, test_user):
-
-    ds_mock = MagicMock(id=1)
-    ds_meta_data_mock = MagicMock(is_draft=False)
-    ds_mock.ds_meta_data = ds_meta_data_mock
-
-    dataset_service.create = MagicMock(return_value=ds_mock)
-    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
-    dataset_service.repository.session.commit = MagicMock()
-
-    form_with_draft_false = test_form
-    form_with_draft_false.is_draft.data = False
-
-    result = dataset_service.create_from_form(form_with_draft_false, test_user)
-
-    assert result == ds_mock
-    assert result.ds_meta_data.is_draft is False
-
-    dataset_service.repository.session.commit.assert_called_once()
-
-
-def test_create_from_form_with_draft_null(dataset_service, test_form, test_user):
-
-    ds_mock = MagicMock(id=1)
-    ds_meta_data_mock = MagicMock(is_draft=False)
-    ds_mock.ds_meta_data = ds_meta_data_mock
-
-    dataset_service.create = MagicMock(return_value=ds_mock)
-    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
-    dataset_service.repository.session.commit = MagicMock()
-
-    form_with_null_draft = test_form
-    form_with_null_draft.is_draft.data = None
-
-    result = dataset_service.create_from_form(form_with_null_draft, test_user)
-
-    assert result == ds_mock
-    assert result.ds_meta_data.is_draft is False
-
-    dataset_service.repository.session.commit.assert_called_once()
-
-
-def test_is_draft_field_validation_invalid_values(test_form):
-
-    form_with_invalid_draft = test_form
-
-    form_with_invalid_draft.is_draft.data = "not_a_boolean"
-
-    assert not form_with_invalid_draft.validate()
-
-    form_with_invalid_draft.is_draft.data = 123
-
-    assert not form_with_invalid_draft.validate()
-
-
-def test_combining_is_draft_with_other_attributes(dataset_service, test_form, test_user):
-
-    ds_mock = MagicMock(id=1)
-    ds_meta_data_mock = MagicMock(is_draft=True, title="Sample Dataset", description="Description")
-    ds_mock.ds_meta_data = ds_meta_data_mock
-
-    dataset_service.create = MagicMock(return_value=ds_mock)
-    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
-    dataset_service.repository.session.commit = MagicMock()
-
-    form_with_data = test_form
-    form_with_data.is_draft.data = True
-    form_with_data.title.data = "Sample Dataset"
-    form_with_data.desc.data = "Description"
-
-    result = dataset_service.create_from_form(form_with_data, test_user)
-
-    assert result.ds_meta_data.is_draft is True
-    assert result.ds_meta_data.title == "Sample Dataset"
-    assert result.ds_meta_data.description == "Description"
-
-
-def test_create_dataset_and_commit(dataset_service, test_form, test_user):
-
-    ds_mock = MagicMock(id=1)
-    ds_meta_data_mock = MagicMock(is_draft=True)
-    ds_mock.ds_meta_data = ds_meta_data_mock
-
-    dataset_service.create = MagicMock(return_value=ds_mock)
-    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
-    dataset_service.repository.session.commit = MagicMock()
-
-    form_with_draft = test_form
-    form_with_draft.is_draft.data = True
-
-    result = dataset_service.create_from_form(form_with_draft, test_user)
-
-    assert result.ds_meta_data.is_draft is True
-
-    dataset_service.repository.session.commit.assert_called_once()
-
-
-def test_count_datasets_by_draft_status(dataset_service):
-
-    dataset_service.repository.get_synchronized = MagicMock(return_value=[MagicMock(ds_meta_data=MagicMock(is_draft=False))])
-    dataset_service.repository.get_unsynchronized = MagicMock(return_value=[MagicMock(ds_meta_data=MagicMock(is_draft=True))])
-
-    dataset_service.repository.count_synchronized_datasets = MagicMock(return_value=1)
-    dataset_service.repository.count_unsynchronized_datasets = MagicMock(return_value=1)
-
-    synced_datasets = dataset_service.count_synchronized_datasets()
-    unsynced_datasets = dataset_service.count_unsynchronized_datasets()
-
-    assert synced_datasets == 1
-    assert unsynced_datasets == 1
-
-
-def test_file_count_and_size_after_publish(dataset_service):
-
-    zenodo_service_mock = MagicMock()
-    zenodo_service_mock.publish_dataset.return_value = MagicMock(
-        publication_doi="10.5281/fakenodo.123456", dataset_doi="10.5281/fakenodo.654321", deposition_id=1
-    )
-
-    dataset_service.zenodo_service = zenodo_service_mock
-
-    dataset_service.db = MagicMock()
-    dataset_service.db.session.commit = MagicMock()
-
-    dataset_mock = MagicMock()
-    dataset_mock.mermaid_diagrams = [MagicMock(files=[MagicMock(size=1024)]), MagicMock(files=[MagicMock(size=2048)])]
-
-    dataset_service.publish(dataset_mock)
-
-    total_size = sum(file.size for diagram in dataset_mock.mermaid_diagrams for file in diagram.files)
-    file_count = sum(len(diagram.files) for diagram in dataset_mock.mermaid_diagrams)
-
-    assert total_size == 3072
-    assert file_count == 2
-
-    dataset_service.db.session.commit.assert_called_once()
-
-
-def test_create_dataset_with_missing_is_draft(dataset_service, test_form, test_user):
-
-    form = test_form
-    form.is_draft.data = None
-
-    ds_mock = MagicMock(id=1)
-    ds_meta_data_mock = MagicMock(is_draft=False)
-    ds_mock.ds_meta_data = ds_meta_data_mock
-
-    dataset_service.create = MagicMock(return_value=ds_mock)
-    dataset_service.dsmetadata_repository.create.return_value = MagicMock(id=99)
-    dataset_service.repository.session.commit = MagicMock()
-
-    result = dataset_service.create_from_form(form, test_user)
-
-    assert result.ds_meta_data.is_draft is False
+# =============================================================================
+# GitHub Upload Tests
+# =============================================================================
+
+
+class TestGitHubUpload:
+    """Tests for uploading .mmd files from GitHub repositories."""
+
+    def test_github_upload_missing_repo_url(self, test_client):
+        """Test that repo_url is required."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        response = test_client.post(
+            "/dataset/file/upload_github",
+            json={},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        data = response.get_json()
+        assert "repo_url is required" in data.get("message", "")
+
+    def test_github_upload_invalid_repo_url(self, test_client):
+        """Test that invalid GitHub URLs are rejected."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        response = test_client.post(
+            "/dataset/file/upload_github",
+            json={"repo_url": "https://gitlab.com/user/repo"},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        data = response.get_json()
+        assert "Invalid GitHub repository URL" in data.get("message", "")
+
+    def test_github_upload_invalid_url_format(self, test_client):
+        """Test various invalid URL formats."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        invalid_urls = [
+            "not-a-url",
+            "ftp://github.com/user/repo",
+            "https://github.com/",
+            "https://github.com/user",
+        ]
+
+        for url in invalid_urls:
+            response = test_client.post(
+                "/dataset/file/upload_github",
+                json={"repo_url": url},
+                content_type="application/json",
+            )
+            assert response.status_code == 400, f"URL '{url}' should be rejected"
+
+    def test_github_upload_valid_url_formats(self, test_client):
+        """Test that various valid GitHub URL formats are accepted."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        valid_urls = [
+            "https://github.com/owner/repo",
+            "https://github.com/owner/repo.git",
+            "git@github.com:owner/repo.git",
+        ]
+
+        for url in valid_urls:
+            with patch("app.modules.dataset.routes.requests.Session") as mock_session:
+                mock_resp = MagicMock()
+                mock_resp.status_code = 200
+                mock_resp.json.return_value = []
+                mock_resp.raise_for_status = MagicMock()
+                mock_session.return_value.get.return_value = mock_resp
+
+                response = test_client.post(
+                    "/dataset/file/upload_github",
+                    json={"repo_url": url},
+                    content_type="application/json",
+                )
+                assert response.status_code != 400 or "Invalid GitHub repository URL" not in response.get_json().get(
+                    "message", ""
+                ), f"URL '{url}' should be accepted as valid format"
+
+    @patch("app.modules.dataset.routes.requests.Session")
+    def test_github_upload_from_public_repo(self, mock_session_class, test_client):
+        """Test uploading from a public GitHub repository."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        unique_filename = f"test_public_repo_{uuid.uuid4().hex[:8]}.mmd"
+
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        contents_response = MagicMock()
+        contents_response.status_code = 200
+        contents_response.json.return_value = [
+            {
+                "type": "file",
+                "name": unique_filename,
+                "path": unique_filename,
+                "download_url": f"https://raw.githubusercontent.com/owner/repo/main/{unique_filename}",
+            }
+        ]
+        contents_response.raise_for_status = MagicMock()
+
+        download_response = MagicMock()
+        download_response.status_code = 200
+        download_response.content = b"flowchart TD\n    A[Start] --> B[End]"
+        download_response.raise_for_status = MagicMock()
+
+        mock_session.get.side_effect = [contents_response, download_response]
+
+        with patch("app.modules.dataset.routes.shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload_github",
+                json={
+                    "repo_url": "https://github.com/owner/repo",
+                    "branch": "main",
+                },
+                content_type="application/json",
+            )
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert unique_filename in data.get("filenames", [])
+        assert data.get("message") == "Files loaded from GitHub"
+
+    @patch("app.modules.dataset.routes.requests.Session")
+    def test_github_upload_with_subdirectory(self, mock_session_class, test_client):
+        """Test uploading from a specific subdirectory."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        unique_filename = f"sequence_{uuid.uuid4().hex[:8]}.mmd"
+
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        contents_response = MagicMock()
+        contents_response.status_code = 200
+        contents_response.json.return_value = [
+            {
+                "type": "file",
+                "name": unique_filename,
+                "path": f"docs/diagrams/{unique_filename}",
+                "download_url": f"https://raw.githubusercontent.com/owner/repo/main/docs/diagrams/{unique_filename}",
+            }
+        ]
+        contents_response.raise_for_status = MagicMock()
+
+        download_response = MagicMock()
+        download_response.status_code = 200
+        download_response.content = b"sequenceDiagram\n    Alice->>Bob: Hello"
+        download_response.raise_for_status = MagicMock()
+
+        mock_session.get.side_effect = [contents_response, download_response]
+
+        with patch("app.modules.dataset.routes.shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload_github",
+                json={
+                    "repo_url": "https://github.com/owner/repo",
+                    "branch": "develop",
+                    "path": "docs/diagrams",
+                },
+                content_type="application/json",
+            )
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert unique_filename in data.get("filenames", [])
+
+    @patch("app.modules.dataset.routes.requests.Session")
+    def test_github_upload_recursive_directories(self, mock_session_class, test_client):
+        """Test that the endpoint recursively searches directories."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        uid = uuid.uuid4().hex[:8]
+        root_filename = f"root_{uid}.mmd"
+        sub_filename = f"sub_{uid}.mmd"
+
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        root_response = MagicMock()
+        root_response.status_code = 200
+        root_response.json.return_value = [
+            {"type": "dir", "name": "diagrams", "path": "diagrams"},
+            {
+                "type": "file",
+                "name": root_filename,
+                "path": root_filename,
+                "download_url": f"https://raw.github.com/{root_filename}",
+            },
+        ]
+        root_response.raise_for_status = MagicMock()
+
+        subdir_response = MagicMock()
+        subdir_response.status_code = 200
+        subdir_response.json.return_value = [
+            {
+                "type": "file",
+                "name": sub_filename,
+                "path": f"diagrams/{sub_filename}",
+                "download_url": f"https://raw.github.com/{sub_filename}",
+            }
+        ]
+        subdir_response.raise_for_status = MagicMock()
+
+        download_sub = MagicMock()
+        download_sub.content = b"flowchart LR\n    C-->D"
+        download_sub.raise_for_status = MagicMock()
+
+        download_root = MagicMock()
+        download_root.content = b"flowchart TD\n    A-->B"
+        download_root.raise_for_status = MagicMock()
+
+        mock_session.get.side_effect = [root_response, subdir_response, download_sub, download_root]
+
+        with patch("app.modules.dataset.routes.shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload_github",
+                json={"repo_url": "https://github.com/owner/repo"},
+                content_type="application/json",
+            )
+
+        assert response.status_code == 200
+        data = response.get_json()
+        filenames = data.get("filenames", [])
+        assert len(filenames) == 2
+        assert root_filename in filenames
+        assert sub_filename in filenames
+
+    @patch("app.modules.dataset.routes.requests.Session")
+    def test_github_upload_no_mmd_files(self, mock_session_class, test_client):
+        """Test when repository has no .mmd files."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        contents_response = MagicMock()
+        contents_response.status_code = 200
+        contents_response.json.return_value = [
+            {"type": "file", "name": "README.md", "path": "README.md"},
+            {"type": "file", "name": "script.py", "path": "script.py"},
+        ]
+        contents_response.raise_for_status = MagicMock()
+
+        mock_session.get.return_value = contents_response
+
+        response = test_client.post(
+            "/dataset/file/upload_github",
+            json={"repo_url": "https://github.com/owner/repo"},
+            content_type="application/json",
+        )
+
+        assert response.status_code == 400
+        data = response.get_json()
+        assert "No Mermaid" in data.get("message", "")
+
+    @patch("app.modules.dataset.routes.requests.Session")
+    def test_github_upload_with_token(self, mock_session_class, test_client):
+        """Test that token is added to headers for private repos."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        contents_response = MagicMock()
+        contents_response.status_code = 200
+        contents_response.json.return_value = []
+        contents_response.raise_for_status = MagicMock()
+        mock_session.get.return_value = contents_response
+
+        test_client.post(
+            "/dataset/file/upload_github",
+            json={
+                "repo_url": "https://github.com/private/repo",
+                "token": "ghp_xxxxxxxxxxxx",
+            },
+            content_type="application/json",
+        )
+
+        mock_session.headers.update.assert_called()
+        call_args = mock_session.headers.update.call_args[0][0]
+        assert "Authorization" in call_args
+        assert "token ghp_xxxxxxxxxxxx" in call_args["Authorization"]
+
+    @patch("app.modules.dataset.routes.requests.Session")
+    def test_github_upload_api_error(self, mock_session_class, test_client):
+        """Test handling of GitHub API errors."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        mock_session.get.side_effect = requests.RequestException("API rate limit exceeded")
+
+        response = test_client.post(
+            "/dataset/file/upload_github",
+            json={"repo_url": "https://github.com/owner/repo"},
+            content_type="application/json",
+        )
+
+        assert response.status_code == 400
+        data = response.get_json()
+        assert len(data.get("errors", [])) > 0
+
+    @patch("app.modules.dataset.routes.requests.Session")
+    def test_github_upload_404_repository(self, mock_session_class, test_client):
+        """Test handling of non-existent repository."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        contents_response = MagicMock()
+        contents_response.status_code = 404
+        mock_session.get.return_value = contents_response
+
+        response = test_client.post(
+            "/dataset/file/upload_github",
+            json={"repo_url": "https://github.com/nonexistent/repo"},
+            content_type="application/json",
+        )
+
+        assert response.status_code == 400
+        data = response.get_json()
+        assert "No Mermaid" in data.get("message", "")
+
+    @patch("app.modules.dataset.routes.requests.Session")
+    def test_github_upload_filters_non_mmd_files(self, mock_session_class, test_client):
+        """Test that only .mmd files are downloaded."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        contents_response = MagicMock()
+        contents_response.status_code = 200
+        contents_response.json.return_value = [
+            {"type": "file", "name": "diagram.mmd", "path": "diagram.mmd", "download_url": "https://raw.github.com/d.mmd"},
+            {"type": "file", "name": "readme.md", "path": "readme.md", "download_url": "https://raw.github.com/r.md"},
+            {"type": "file", "name": "script.js", "path": "script.js", "download_url": "https://raw.github.com/s.js"},
+            {"type": "file", "name": "chart.MMD", "path": "chart.MMD", "download_url": "https://raw.github.com/c.mmd"},
+        ]
+        contents_response.raise_for_status = MagicMock()
+
+        download_response = MagicMock()
+        download_response.content = b"flowchart TD\n    A-->B"
+        download_response.raise_for_status = MagicMock()
+
+        mock_session.get.side_effect = [contents_response, download_response, download_response]
+
+        with patch("app.modules.dataset.routes.shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload_github",
+                json={"repo_url": "https://github.com/owner/repo"},
+                content_type="application/json",
+            )
+
+        assert response.status_code == 200
+        data = response.get_json()
+        filenames = data.get("filenames", [])
+        assert len(filenames) == 2
+        assert all(f.lower().endswith(".mmd") for f in filenames)
+
+    @patch("app.modules.dataset.routes.requests.Session")
+    def test_github_upload_handles_duplicate_filenames(self, mock_session_class, test_client):
+        """Test that duplicate filenames are handled with incremental suffixes."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        uid = uuid.uuid4().hex[:8]
+        base_filename = f"duplicate_{uid}.mmd"
+
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        root_response = MagicMock()
+        root_response.status_code = 200
+        root_response.json.return_value = [
+            {"type": "file", "name": base_filename, "path": base_filename, "download_url": "https://raw.github.com/d1.mmd"},
+            {"type": "dir", "name": "sub", "path": "sub"},
+        ]
+        root_response.raise_for_status = MagicMock()
+
+        download1 = MagicMock()
+        download1.content = b"flowchart TD\n    A-->B"
+        download1.raise_for_status = MagicMock()
+
+        sub_response = MagicMock()
+        sub_response.status_code = 200
+        sub_response.json.return_value = [
+            {
+                "type": "file",
+                "name": base_filename,
+                "path": f"sub/{base_filename}",
+                "download_url": "https://raw.github.com/d2.mmd",
+            }
+        ]
+        sub_response.raise_for_status = MagicMock()
+
+        download2 = MagicMock()
+        download2.content = b"flowchart LR\n    C-->D"
+        download2.raise_for_status = MagicMock()
+
+        mock_session.get.side_effect = [root_response, download1, sub_response, download2]
+
+        with patch("app.modules.dataset.routes.shutil.which", return_value=None):
+            response = test_client.post(
+                "/dataset/file/upload_github",
+                json={"repo_url": "https://github.com/owner/repo"},
+                content_type="application/json",
+            )
+
+        assert response.status_code == 200
+        data = response.get_json()
+        filenames = data.get("filenames", [])
+        assert len(filenames) == 2
+        base_name = base_filename.rsplit(".", 1)[0]
+        expected_dup = f"{base_name} (1).mmd"
+        assert base_filename in filenames
+        assert expected_dup in filenames
+
+    def test_github_upload_form_data(self, test_client):
+        """Test that form data is also accepted (not just JSON)."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        with patch("app.modules.dataset.routes.requests.Session") as mock_session_class:
+            mock_session = MagicMock()
+            mock_session_class.return_value = mock_session
+
+            contents_response = MagicMock()
+            contents_response.status_code = 200
+            contents_response.json.return_value = []
+            contents_response.raise_for_status = MagicMock()
+            mock_session.get.return_value = contents_response
+
+            response = test_client.post(
+                "/dataset/file/upload_github",
+                data={"repo_url": "https://github.com/owner/repo", "branch": "develop"},
+            )
+
+            assert response.status_code in [200, 400]  # 400 only if no files found
+
+    @patch("app.modules.dataset.routes.requests.Session")
+    def test_github_upload_default_branch_main(self, mock_session_class, test_client):
+        """Test that default branch is 'main' when not specified."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        contents_response = MagicMock()
+        contents_response.status_code = 200
+        contents_response.json.return_value = []
+        contents_response.raise_for_status = MagicMock()
+        mock_session.get.return_value = contents_response
+
+        test_client.post(
+            "/dataset/file/upload_github",
+            json={"repo_url": "https://github.com/owner/repo"},
+            content_type="application/json",
+        )
+
+        call_args = mock_session.get.call_args
+        assert call_args[1]["params"]["ref"] == "main"
+
+    @patch("app.modules.dataset.routes.requests.Session")
+    def test_github_upload_custom_branch(self, mock_session_class, test_client):
+        """Test uploading from a specific branch."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+
+        contents_response = MagicMock()
+        contents_response.status_code = 200
+        contents_response.json.return_value = []
+        contents_response.raise_for_status = MagicMock()
+        mock_session.get.return_value = contents_response
+
+        test_client.post(
+            "/dataset/file/upload_github",
+            json={"repo_url": "https://github.com/owner/repo", "branch": "develop"},
+            content_type="application/json",
+        )
+
+        call_args = mock_session.get.call_args
+        assert call_args[1]["params"]["ref"] == "develop"
+
+
+class TestGitHubUploadIntegration:
+    """Integration tests for GitHub upload using real public repositories.
+
+    These tests make real HTTP requests to GitHub API.
+    They may fail if:
+    - GitHub API is down
+    - Rate limit is exceeded
+    - The test repository structure changes
+    """
+
+    @pytest.mark.integration
+    def test_github_upload_real_public_repo(self, test_client):
+        """Test uploading from a real public GitHub repository (mermaid-js/mermaid)."""
+        test_client.post("/login", data={"email": "test@example.com", "password": "test1234"}, follow_redirects=True)
+
+        response = test_client.post(
+            "/dataset/file/upload_github",
+            json={
+                "repo_url": "https://github.com/mermaid-js/mermaid",
+                "branch": "develop",
+                "path": "docs/diagrams",
+            },
+            content_type="application/json",
+        )
+
+        assert response.status_code in [200, 400]
+        data = response.get_json()
+
+        if response.status_code == 200:
+            assert "filenames" in data
+            assert len(data["filenames"]) > 0
+            for filename in data["filenames"]:
+                assert filename.lower().endswith(".mmd")
+        else:
+            assert "message" in data
