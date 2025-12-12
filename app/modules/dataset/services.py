@@ -214,11 +214,15 @@ class DataSetService(BaseService):
         target_meta = target_ds.ds_meta_data
         target_diagram_type = target_meta.diagram_type
 
-        datasets = self.repository.model.query.join(DataSet.ds_meta_data).filter(
-            DSMetaData.diagram_type == target_diagram_type,
-            DataSet.id != dataset.id,
-            DSMetaData.is_draft == 0,
-        ).all()
+        datasets = (
+            self.repository.model.query.join(DataSet.ds_meta_data)
+            .filter(
+                DSMetaData.diagram_type == target_diagram_type,
+                DataSet.id != dataset.id,
+                DSMetaData.is_draft == 0,
+            )
+            .all()
+        )
 
         if not datasets:
             return []
@@ -232,11 +236,7 @@ class DataSetService(BaseService):
             author_sim = self.author_similarity(target_ds, ds)
             popularity_score = 4 * (pop / max_popularity)
 
-            score = (
-                3 * tag_sim +
-                1 * author_sim +
-                popularity_score
-            )
+            score = 3 * tag_sim + 1 * author_sim + popularity_score
 
             results.append((ds, score))
 
