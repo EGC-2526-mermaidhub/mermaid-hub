@@ -1,0 +1,74 @@
+{% extends "base_template.html" %}
+
+{% block title %}Edit dataset{% endblock %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col-6">
+      <a href="/explore" class="btn btn-primary btn-sm" id="search" style="border-radius: 5px;">
+        <i data-feather="search" class="center-button-icon"></i>
+        Explore more datasets
+      </a>
+    </div>
+  </div>
+
+  <h1 class="h2 mb-3"><b>Edit</b> dataset</h1>
+
+<form method="POST" id="edit_dataset_form">
+  {{ form.hidden_tag() }}
+
+  <div class="row">
+    <div class="col-xl-6 col-lg-12 col-md-12 col-sm-12">
+      <h3>Basic info</h3>
+      <div class="mb-3">
+        {{ form.title.label(class='form-label') }} *
+        {{ form.title(class='form-control') }}
+        {% for error in form.title.errors %}
+          <span class="text-danger">{{ error }}</span>
+        {% endfor %}
+      </div>
+
+      <div class="mb-3">
+        {{ form.desc.label(class='form-label') }} *
+        {{ form.desc(rows=4, class='form-control') }}
+        {% for error in form.desc.errors %}
+          <span class="text-danger">{{ error }}</span>
+        {% endfor %}
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Diagram type</label>
+        {{ form.diagram_type(class='form-control') }}
+      </div>
+
+      <div class="mb-3">
+        {{ form.tags.label(class='form-label') }}
+        {{ form.tags(class='form-control') }}
+      </div>
+
+      <h3 class="mt-4">Authors</h3>
+      <div class="mb-3">
+        <input class="form-control" disabled value="{{ current_user.profile.surname }}, {{ current_user.profile.name }}">
+      </div>
+      <ul>
+        {% for author in dataset.ds_meta_data.authors %}
+          {% if not loop.first %}
+            <li>{{ author.name }}{% if author.affiliation %} ({{ author.affiliation }}){% endif %}</li>
+          {% endif %}
+        {% endfor %}
+      </ul>
+
+      <div class="mb-3">
+          <button type="submit" name="action" value="save" formaction="{{ url_for('dataset.save_dataset', dataset_id=dataset.id) }}" class="btn btn-primary">Save</button>
+          {% if dataset.ds_meta_data.is_draft %}
+              <button type="submit" name="action" value="publish" formaction="{{ url_for('dataset.publish_dataset', dataset_id=dataset.id) }}" class="btn btn-success">Publish</button>
+          {% endif %}
+          <a href="{{ url_for('dataset.view_dataset', dataset_id=dataset.id) }}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </div>
+  </div>
+</form>
+
+  <script>document.addEventListener('DOMContentLoaded', function(){feather.replace()});</script>
+
+{% endblock %}
