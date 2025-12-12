@@ -207,6 +207,9 @@ class DataSetService(BaseService):
         return views + downloads
 
     def recommend_simple(self, dataset, top_n=3):
+        if dataset is None:
+            return []
+
         target_ds = dataset
         target_meta = target_ds.ds_meta_data
         target_diagram_type = target_meta.diagram_type

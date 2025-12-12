@@ -652,7 +652,18 @@ def test_doi_route_renders_dataset(test_client):
     ):
 
         mock_doi.get_new_doi.return_value = None
+
         mock_dataset = MagicMock()
+        mock_dataset.id = 1
+
+        mock_ds_meta = MagicMock()
+        mock_ds_meta.diagram_type = DiagramType.FLOWCHART
+        mock_ds_meta.tags = "tagA, tagB"
+        mock_ds_meta.authors = []
+        mock_ds_meta.is_draft = 0
+
+        mock_dataset.ds_meta_data = mock_ds_meta
+
         mock_ds.filter_by_doi.return_value = MagicMock(data_set=mock_dataset)
         mock_view.create_cookie.return_value = str(uuid.uuid4())
 
@@ -775,11 +786,9 @@ def test_download_with_existing_cookie(test_client):
 
 
 def test_dataset_recommendation(dataset_service):
-
     target = MagicMock(id=1)
     target.ds_meta_data.diagram_type = DiagramType.FLOWCHART
     target.ds_meta_data.tags = "tagA, tagB"
-
     author_target = MagicMock()
     author_target.name = "Author One"
     target.ds_meta_data.authors = [author_target]
@@ -790,24 +799,23 @@ def test_dataset_recommendation(dataset_service):
     rec_high.ds_meta_data.authors = []
 
     rec_low = MagicMock(id=3)
-    rec_low.ds_meta_data.diagram_type = DiagramType.CLASS_DIAGRAM
+    rec_low.ds_meta_data.diagram_type = DiagramType.CLASS_DIAGRAM  # Será filtrado por diagram_type
     rec_low.ds_meta_data.tags = "tagZ"
     rec_low.ds_meta_data.authors = []
 
-    dataset_service.repository.model.query.all.return_value = [target, rec_high, rec_low]
+    # La query ahora filtra por diagram_type, rec_low será excluido
+    dataset_service.repository.model.query.join.return_value.filter.return_value.all.return_value = [rec_high]
 
     dataset_service.dsviewrecord_repostory.model.query.filter_by.return_value.count.return_value = 0
     dataset_service.dsdownloadrecord_repository.model.query.filter_by.return_value.count.return_value = 0
 
-    recommendations = dataset_service.recommend_simple(dataset_id=1, top_n=5)
+    recommendations = dataset_service.recommend_simple(target, top_n=5)
 
-    assert len(recommendations) == 2
+    assert len(recommendations) == 1
     assert recommendations[0].id == 2
-    assert recommendations[1].id == 3
 
 
 def test_recommendation_limit_n(dataset_service):
-
     target = MagicMock(id=1)
     target.ds_meta_data.diagram_type = DiagramType.FLOWCHART
     target.ds_meta_data.tags = "tagA"
@@ -815,25 +823,22 @@ def test_recommendation_limit_n(dataset_service):
 
     candidates = []
     for i in range(2, 7):
-
         candidate = MagicMock(id=i)
         candidate.ds_meta_data.diagram_type = DiagramType.FLOWCHART
         candidate.ds_meta_data.tags = "tagA"
         candidate.ds_meta_data.authors = []
         candidates.append(candidate)
 
-    dataset_service.repository.model.query.all.return_value = [target] + candidates
+    dataset_service.repository.model.query.join.return_value.filter.return_value.all.return_value = candidates
 
     dataset_service.dsviewrecord_repostory.model.query.filter_by.return_value.count.return_value = 0
     dataset_service.dsdownloadrecord_repository.model.query.filter_by.return_value.count.return_value = 0
 
-    recommendations = dataset_service.recommend_simple(dataset_id=1, top_n=3)
-
+    recommendations = dataset_service.recommend_simple(target, top_n=3)
     assert len(recommendations) == 3
 
 
 def test_recommendation_excludes_self(dataset_service):
-
     target = MagicMock(id=1)
     target.ds_meta_data.diagram_type = DiagramType.FLOWCHART
     target.ds_meta_data.tags = "tagA"
@@ -844,12 +849,12 @@ def test_recommendation_excludes_self(dataset_service):
     candidate.ds_meta_data.tags = "tagA"
     candidate.ds_meta_data.authors = []
 
-    dataset_service.repository.model.query.all.return_value = [target, candidate]
+    dataset_service.repository.model.query.join.return_value.filter.return_value.all.return_value = [candidate]
 
     dataset_service.dsviewrecord_repostory.model.query.filter_by.return_value.count.return_value = 0
     dataset_service.dsdownloadrecord_repository.model.query.filter_by.return_value.count.return_value = 0
 
-    recommendations = dataset_service.recommend_simple(dataset_id=1, top_n=5)
+    recommendations = dataset_service.recommend_simple(target, top_n=5)
 
     ids_returned = [r.id for r in recommendations]
     assert 1 not in ids_returned
@@ -857,18 +862,11 @@ def test_recommendation_excludes_self(dataset_service):
 
 
 def test_recommendation_returns_empty_if_target_not_found(dataset_service):
-
-    mock_ds1 = MagicMock(id=1)
-    mock_ds2 = MagicMock(id=2)
-    dataset_service.repository.model.query.all.return_value = [mock_ds1, mock_ds2]
-
-    recommendations = dataset_service.recommend_simple(dataset_id=999, top_n=3)
-
+    recommendations = dataset_service.recommend_simple(None, top_n=3)
     assert recommendations == []
 
 
 def test_recommendation_handles_none_tags_gracefully(dataset_service):
-
     target = MagicMock(id=1)
     target.ds_meta_data.diagram_type = DiagramType.FLOWCHART
     target.ds_meta_data.tags = "tagA"
@@ -879,13 +877,13 @@ def test_recommendation_handles_none_tags_gracefully(dataset_service):
     candidate.ds_meta_data.tags = None
     candidate.ds_meta_data.authors = []
 
-    dataset_service.repository.model.query.all.return_value = [target, candidate]
+    dataset_service.repository.model.query.join.return_value.filter.return_value.all.return_value = [candidate]
 
     dataset_service.dsviewrecord_repostory.model.query.filter_by.return_value.count.return_value = 0
     dataset_service.dsdownloadrecord_repository.model.query.filter_by.return_value.count.return_value = 0
 
     try:
-        recommendations = dataset_service.recommend_simple(dataset_id=1, top_n=3)
+        recommendations = dataset_service.recommend_simple(target, top_n=3)
     except AttributeError:
         pytest.fail("El algoritmo falló al procesar tags con valor None")
 
