@@ -10,7 +10,17 @@ from datetime import datetime, timezone
 from zipfile import ZipFile
 
 import requests
-from flask import abort, jsonify, make_response, redirect, render_template, request, send_from_directory, url_for
+from flask import (
+    abort,
+    flash,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    send_from_directory,
+    url_for,
+)
 from flask_login import current_user, login_required
 
 from app.modules.dataset import dataset_bp
@@ -148,23 +158,86 @@ def list_dataset():
 @dataset_bp.route("/dataset/edit/<int:dataset_id>", methods=["GET", "POST"])
 @login_required
 def edit_dataset(dataset_id):
-    dataset = dataset_service.get_unsynchronized_dataset(current_user.id, dataset_id)
-    if not dataset:
-        abort(404)
+    dataset = dataset_service.get_or_404(dataset_id)
+
+    if dataset.user_id != current_user.id:
+        abort(403)
 
     form = DataSetForm(obj=dataset.ds_meta_data)
 
     if request.method == "POST":
         if form.validate_on_submit():
-            dataset.ds_meta_data.title = form.title.data
-            dataset.ds_meta_data.description = form.desc.data
-            dataset.ds_meta_data.tags = form.tags.data
-            dataset.ds_meta_data.is_draft = form.is_draft.data == "true"
+            action = request.form.get("action")
 
-            """db.session.commit()"""
-            return redirect(url_for("dataset.view_dataset", dataset_id=dataset.id))
+            try:
+                dsmetadata_updates = {
+                    "title": form.title.data,
+                    "description": form.desc.data,
+                    "tags": form.tags.data,
+                    "diagram_type": form.diagram_type.data,
+                }
+
+                if action == "save":
+                    dsmetadata_updates["is_draft"] = True
+                    dataset_service.save_dataset(dataset, **dsmetadata_updates)
+                    flash("Changes saved successfully as draft.", "success")
+                    return redirect(url_for("dataset.view_dataset", dataset_id=dataset.id))
+
+                elif action == "publish":
+                    dataset_service.publish_dataset(dataset)
+                    flash("Dataset published successfully!", "success")
+                    return redirect(url_for("dataset.view_dataset", dataset_id=dataset.id))
+
+            except Exception as e:
+                logger.error(f"Error updating dataset: {e}")
+                flash(f"Error updating dataset: {str(e)}", "error")
+
+        else:
+            flash("There were errors in the form submission.", "error")
 
     return render_template("dataset/edit_dataset.html", form=form, dataset=dataset)
+
+
+@dataset_bp.route("/dataset/save/<int:dataset_id>", methods=["POST"])
+@login_required
+def save_dataset(dataset_id):
+
+    dataset = dataset_service.get_unsynchronized_dataset(current_user.id, dataset_id)
+    if not dataset:
+        abort(404)
+
+    logger.info(f"Saving draft dataset {dataset_id}.")
+
+    try:
+        dsmetadata_updates = {}
+        if request.form.get("title"):
+            dsmetadata_updates["title"] = request.form.get("title")
+        if request.form.get("desc"):
+            dsmetadata_updates["description"] = request.form.get("desc")
+        if request.form.get("tags"):
+            dsmetadata_updates["tags"] = request.form.get("tags")
+        if request.form.get("diagram_type"):
+            dsmetadata_updates["diagram_type"] = request.form.get("diagram_type")
+
+        if dsmetadata_updates:
+            try:
+                dataset_service.update_dsmetadata(dataset.ds_meta_data_id, **dsmetadata_updates)
+            except Exception:
+                logger.exception("Failed to update dsmetadata before saving")
+
+        dataset_service.add_mermaid_diagrams_from_temp(dataset)
+
+        dsmetadata_updates["is_draft"] = True
+        dataset_service.save_dataset(dataset, **dsmetadata_updates)
+
+        flash("Changes saved successfully as draft.", "success")
+
+        return redirect(url_for("dataset.list_dataset"))
+
+    except Exception as exc:
+        logger.exception(f"Error while saving dataset {dataset_id}: {exc}")
+        flash("Failed to save dataset. Check logs for details.", "error")
+        return redirect(url_for("dataset.view_dataset", dataset_id=dataset_id)), 500
 
 
 @dataset_bp.route("/dataset/file/upload", methods=["POST"])
@@ -177,6 +250,9 @@ def upload():
                     list of accepted filenames and rejected files with reasons.
     """
     file = request.files["file"]
+
+    file = request.files.get("file")
+
     temp_folder = current_user.temp_folder()
 
     if not file or not file.filename:
@@ -567,35 +643,34 @@ def publish_dataset(dataset_id):
 
     logger.info(f"Publishing draft dataset {dataset_id} to Zenodo.")
 
-    data = {}
     try:
-        zenodo_response_json = fakenodo_service.create_new_deposition(dataset)
-        data = json.loads(json.dumps(zenodo_response_json))
+        dsmetadata_updates = {}
+        if request.form.get("title"):
+            dsmetadata_updates["title"] = request.form.get("title")
+        if request.form.get("desc"):
+            dsmetadata_updates["description"] = request.form.get("desc")
+        if request.form.get("tags"):
+            dsmetadata_updates["tags"] = request.form.get("tags")
+        if request.form.get("diagram_type"):
+            dsmetadata_updates["diagram_type"] = request.form.get("diagram_type")
+        if dsmetadata_updates:
+            try:
+                dataset_service.update_dsmetadata(dataset.ds_meta_data_id, **dsmetadata_updates)
+            except Exception:
+                logger.exception("Failed to update dsmetadata before publish")
+
+        dataset_service.add_mermaid_diagrams_from_temp(dataset)
+
+        dataset = dataset_service.get_unsynchronized_dataset(current_user.id, dataset_id)
+
+        dataset_service.publish(dataset)
+
+        return redirect(url_for("dataset.list_dataset"))
+
     except Exception as exc:
-        logger.exception(f"Zenodo API error during deposition creation for {dataset_id}: {exc}")
+        logger.exception(f"Error while publishing dataset {dataset_id}: {exc}")
+        flash("Failed to publish dataset. Check logs for details.", "error")
         return redirect(url_for("dataset.view_dataset", dataset_id=dataset_id)), 500
-
-    if data.get("conceptrecid"):
-        deposition_id = data.get("id")
-        dataset_service.update_dsmetadata(dataset.ds_meta_data_id, deposition_id=deposition_id)
-
-        try:
-            for mermaid_diagram in dataset.mermaid_diagrams:
-                fakenodo_service.upload_file(dataset, deposition_id, mermaid_diagram)
-
-            fakenodo_service.publish_deposition(deposition_id)
-
-            deposition_doi = fakenodo_service.get_doi(deposition_id)
-            dataset_service.update_dsmetadata(dataset.ds_meta_data_id, dataset_doi=deposition_doi, is_draft=False)
-            logger.info(f"Dataset {dataset_id} successfully published to Zenodo with DOI {deposition_doi}")
-            return redirect(url_for("dataset.list_dataset"))
-
-        except Exception as e:
-            logger.exception(f"Zenodo API error during file upload/publish for {dataset_id}: {e}")
-            return redirect(url_for("dataset.view_dataset", dataset_id=dataset_id)), 500
-    else:
-        logger.error(f"Zenodo did not return conceptrecid for {dataset_id}. Response: {data}")
-        return redirect(url_for("dataset.list_dataset")), 500
 
 
 @dataset_bp.route("/dataset/file/delete", methods=["POST"])
@@ -653,6 +728,20 @@ def download_dataset(dataset_id):
     resp.set_cookie("download_cookie", user_cookie)
 
     return resp
+
+
+@dataset_bp.route("/dataset/view/<int:dataset_id>", methods=["GET"])
+def view_dataset(dataset_id):
+    dataset = dataset_service.get_or_404(dataset_id)
+
+    if dataset.ds_meta_data.is_draft:
+        dataset = dataset_service.get_unsynchronized_dataset(current_user.id, dataset_id)
+        if not dataset:
+            abort(404)
+
+    dataset.download_count = DSDownloadRecordService().get_download_count(dataset.id)
+    form = PublishDatasetForm()
+    return render_template("dataset/view_dataset.html", dataset=dataset, form=form)
 
 
 @dataset_bp.route("/doi/<path:doi>/", methods=["GET"])

@@ -22,6 +22,7 @@ from app.modules.dataset.repositories import (
 )
 from app.modules.hubfile.repositories import HubfileDownloadRecordRepository, HubfileRepository, HubfileViewRecordRepository
 from app.modules.mermaiddiagram.repositories import MDMetaDataRepository, MermaidDiagramRepository
+from app.modules.zenodo.services import FakenodoService
 from core.services.BaseService import BaseService
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ class DataSetService(BaseService):
         self.hubfilerepository = HubfileRepository()
         self.dsviewrecord_repostory = DSViewRecordRepository()
         self.hubfileviewrecord_repository = HubfileViewRecordRepository()
+        self.zenodo_service = FakenodoService()
 
     def move_mermaid_diagrams(self, dataset: DataSet):
         current_user = AuthenticationService().get_authenticated_user()
@@ -59,7 +61,81 @@ class DataSetService(BaseService):
 
         for mermaid_diagram in dataset.mermaid_diagrams:
             mmd_filename = mermaid_diagram.md_meta_data.mmd_filename
-            shutil.move(os.path.join(source_dir, mmd_filename), dest_dir)
+            src_path = os.path.join(source_dir, mmd_filename)
+
+            if not os.path.exists(src_path):
+                logger.warning(f"Source mermaid file {src_path} not found for dataset {dataset.id}")
+                continue
+            dst_path = os.path.join(dest_dir, mmd_filename)
+
+            if os.path.exists(dst_path):
+                base_name, extension = os.path.splitext(mmd_filename)
+                i = 1
+                while os.path.exists(os.path.join(dest_dir, f"{base_name} ({i}){extension}")):
+                    i += 1
+                new_filename = f"{base_name} ({i}){extension}"
+                dst_path = os.path.join(dest_dir, new_filename)
+                try:
+                    mermaid_diagram.md_meta_data.mmd_filename = new_filename
+                    for f in mermaid_diagram.files:
+                        if f.name == mmd_filename:
+                            f.name = new_filename
+                    self.repository.session.commit()
+                except Exception:
+                    self.repository.session.rollback()
+            try:
+                shutil.move(src_path, dst_path)
+            except Exception as exc:
+                logger.exception(f"Failed to move mermaid diagram {src_path} to {dst_path}: {exc}")
+
+    def add_mermaid_diagrams_from_temp(self, dataset: DataSet):
+        current_user = AuthenticationService().get_authenticated_user()
+        source_dir = current_user.temp_folder()
+
+        if not os.path.exists(source_dir) or not os.path.isdir(source_dir):
+            return
+
+        working_dir = os.getenv("WORKING_DIR", "")
+        dest_dir = os.path.join(working_dir, "uploads", f"user_{current_user.id}", f"dataset_{dataset.id}")
+        os.makedirs(dest_dir, exist_ok=True)
+
+        files = [f for f in os.listdir(source_dir) if os.path.isfile(os.path.join(source_dir, f)) and f.endswith(".mmd")]
+
+        if not files:
+            return
+
+        for filename in files:
+            try:
+                src_path = os.path.join(source_dir, filename)
+
+                base_name, extension = os.path.splitext(filename)
+                new_filename = filename
+                dst_path = os.path.join(dest_dir, new_filename)
+                i = 1
+                while os.path.exists(dst_path):
+                    new_filename = f"{base_name} ({i}){extension}"
+                    dst_path = os.path.join(dest_dir, new_filename)
+                    i += 1
+
+                shutil.move(src_path, dst_path)
+
+                mdmetadata = self.mdmetadata_repository.create(commit=False, mmd_filename=new_filename, title=new_filename)
+
+                md = self.mermaid_diagram_repository.create(commit=False, data_set_id=dataset.id, md_meta_data_id=mdmetadata.id)
+
+                checksum, size = calculate_checksum_and_size(dst_path)
+                file = self.hubfilerepository.create(
+                    commit=False,
+                    name=new_filename,
+                    checksum=checksum,
+                    size=size,
+                    mermaid_diagram_id=md.id,
+                )
+                md.files.append(file)
+                self.repository.session.commit()
+            except Exception as exc:
+                logger.exception(f"Error while adding mermaid diagram from temp: {exc}")
+                self.repository.session.rollback()
 
     def get_synchronized(self, current_user_id: int) -> DataSet:
         return self.repository.get_synchronized(current_user_id)
@@ -172,15 +248,44 @@ class DataSetService(BaseService):
     def update_dsmetadata(self, id, **kwargs):
         return self.dsmetadata_repository.update(id, **kwargs)
 
+    def save_dataset(self, dataset, **kwargs):
+        dsmeta = dataset.ds_meta_data
+        for key, value in kwargs.items():
+            if hasattr(dsmeta, key):
+                setattr(dsmeta, key, value)
+
+        self.dsmetadata_repository.update(dataset.id, **kwargs)
+        self.repository.session.commit()
+        return dataset
+
     def publish(self, dataset):
-        zenodo_result = self.zenodo_service.publish_dataset(dataset)
+        try:
+            zenodo_response_json = self.zenodo_service.create_new_deposition(dataset)
+        except Exception as exc:
+            logger.exception(f"Zenodo creation failed: {exc}")
+            raise
 
-        dataset.ds_meta_data.is_draft = False
-        dataset.ds_meta_data.publication_doi = zenodo_result.publication_doi
-        dataset.ds_meta_data.dataset_doi = zenodo_result.dataset_doi
-        dataset.ds_meta_data.deposition_id = zenodo_result.deposition_id
+        data = zenodo_response_json
 
-        self.db.session.commit()
+        if data and data.get("conceptrecid"):
+            deposition_id = data.get("id")
+
+            self.update_dsmetadata(dataset.ds_meta_data.id, deposition_id=deposition_id)
+
+            try:
+                for mermaid_diagram in dataset.mermaid_diagrams:
+                    self.zenodo_service.upload_file(dataset, deposition_id, mermaid_diagram)
+
+                self.zenodo_service.publish_deposition(deposition_id)
+
+                deposition_doi = self.zenodo_service.get_doi(deposition_id)
+                self.update_dsmetadata(dataset.ds_meta_data.id, dataset_doi=deposition_doi, is_draft=False)
+                return True
+            except Exception as e:
+                logger.exception(f"Zenodo upload/publish failed: {e}")
+                raise
+        else:
+            raise Exception("Zenodo did not return conceptrecid")
 
     def get_mermaidhub_doi(self, dataset: DataSet) -> str:
         try:
