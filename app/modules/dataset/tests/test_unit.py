@@ -699,60 +699,6 @@ def test_download_dataset_creates_zip(test_client):
     test_client.get("/logout", follow_redirects=True)
 
 
-def test_download_with_existing_cookie(test_client):
-    import os
-    import shutil
-    import tempfile
-    import uuid
-    from unittest.mock import MagicMock, patch
-    from zipfile import ZipFile
-
-    # Loguearse
-    response = test_client.post(
-        "/login",
-        data=dict(email="test@example.com", password="test1234"),
-        follow_redirects=True,
-    )
-    assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
-
-    # Crear cookie
-    cookie_value = str(uuid.uuid4())
-    test_client.set_cookie("download_cookie", cookie_value)
-
-    # Crear directorio temporal y zip dummy
-    temp_dir = tempfile.mkdtemp()
-    zip_path = os.path.join(temp_dir, "dataset_1.zip")
-    with ZipFile(zip_path, "w"):
-        pass
-
-    mock_dataset = MagicMock()
-    mock_dataset.id = 1
-    mock_dataset.user_id = 1
-
-    try:
-        with (
-            patch("app.modules.dataset.routes.dataset_service.get_or_404", return_value=mock_dataset),
-            patch("os.walk", return_value=[]),
-            patch("tempfile.mkdtemp", return_value=temp_dir),
-            patch("app.modules.dataset.routes.DSDownloadRecordService.create") as mock_create,
-        ):
-
-            # Evitar que se cree registro real
-            mock_create.return_value = None
-
-            # Ejecutar endpoint
-            response = test_client.get("/dataset/download/1")
-            assert response.status_code == 200
-
-            content_disposition = response.headers.get("Content-Disposition", "")
-            assert "dataset_1.zip" in content_disposition
-
-    finally:
-        shutil.rmtree(temp_dir)
-
-    test_client.get("/logout", follow_redirects=True)
-
-
 def test_create_from_form_with_draft_status(dataset_service, test_form, test_user):
 
     ds_mock = MagicMock(id=1)
@@ -1028,3 +974,57 @@ def test_file_count_and_size_after_publish(dataset_service):
 
     assert total_size == 3072
     assert file_count == 2
+
+
+def test_download_with_existing_cookie(test_client):
+    import os
+    import shutil
+    import tempfile
+    import uuid
+    from unittest.mock import MagicMock, patch
+    from zipfile import ZipFile
+
+    # Loguearse
+    response = test_client.post(
+        "/login",
+        data=dict(email="test@example.com", password="test1234"),
+        follow_redirects=True,
+    )
+    assert response.request.path != url_for("auth.login"), "Login was unsuccessful"
+
+    # Crear cookie
+    cookie_value = str(uuid.uuid4())
+    test_client.set_cookie("download_cookie", cookie_value)
+
+    # Crear directorio temporal y zip dummy
+    temp_dir = tempfile.mkdtemp()
+    zip_path = os.path.join(temp_dir, "dataset_1.zip")
+    with ZipFile(zip_path, "w"):
+        pass
+
+    mock_dataset = MagicMock()
+    mock_dataset.id = 1
+    mock_dataset.user_id = 1
+
+    try:
+        with (
+            patch("app.modules.dataset.routes.dataset_service.get_or_404", return_value=mock_dataset),
+            patch("os.walk", return_value=[]),
+            patch("tempfile.mkdtemp", return_value=temp_dir),
+            patch("app.modules.dataset.routes.DSDownloadRecordService.create") as mock_create,
+        ):
+
+            # Evitar que se cree registro real
+            mock_create.return_value = None
+
+            # Ejecutar endpoint
+            response = test_client.get("/dataset/download/1")
+            assert response.status_code == 200
+
+            content_disposition = response.headers.get("Content-Disposition", "")
+            assert "dataset_1.zip" in content_disposition
+
+    finally:
+        shutil.rmtree(temp_dir)
+
+    test_client.get("/logout", follow_redirects=True)
