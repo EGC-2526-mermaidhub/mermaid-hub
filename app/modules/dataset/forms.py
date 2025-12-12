@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import FieldList, FormField, SelectField, StringField, SubmitField, TextAreaField
+from wtforms import BooleanField, FieldList, FormField, SelectField, StringField, SubmitField, TextAreaField
 from wtforms.validators import URL, DataRequired, Optional
 
 from app.modules.dataset.models import DiagramType
@@ -71,6 +71,7 @@ class DataSetForm(FlaskForm):
     tags = StringField("Tags (separated by commas)")
     authors = FieldList(FormField(AuthorForm))
     mermaid_diagrams = FieldList(FormField(MermaidDiagramForm), min_entries=1)
+    is_draft = BooleanField("Save as draft?", default=True)
 
     submit = SubmitField("Submit")
 
