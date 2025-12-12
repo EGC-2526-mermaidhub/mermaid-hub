@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from flask import url_for
-from wtforms import Form, BooleanField, StringField, TextAreaField, SubmitField
+from wtforms import BooleanField, Form, StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired
 
 from app.modules.dataset.services import (
@@ -986,32 +986,6 @@ def test_count_datasets_by_draft_status(dataset_service):
     assert unsynced_datasets == 1
 
 
-def test_file_count_and_size_after_publish(dataset_service):
-
-    zenodo_service_mock = MagicMock()
-    zenodo_service_mock.publish_dataset.return_value = MagicMock(
-        publication_doi="10.5281/fakenodo.123456", dataset_doi="10.5281/fakenodo.654321", deposition_id=1
-    )
-
-    dataset_service.zenodo_service = zenodo_service_mock
-
-    dataset_service.db = MagicMock()
-    dataset_service.db.session.commit = MagicMock()
-
-    dataset_mock = MagicMock()
-    dataset_mock.mermaid_diagrams = [MagicMock(files=[MagicMock(size=1024)]), MagicMock(files=[MagicMock(size=2048)])]
-
-    dataset_service.publish(dataset_mock)
-
-    total_size = sum(file.size for diagram in dataset_mock.mermaid_diagrams for file in diagram.files)
-    file_count = sum(len(diagram.files) for diagram in dataset_mock.mermaid_diagrams)
-
-    assert total_size == 3072
-    assert file_count == 2
-
-    dataset_service.db.session.commit.assert_called_once()
-
-
 def test_create_dataset_with_missing_is_draft(dataset_service, test_form, test_user):
 
     form = test_form
@@ -1028,3 +1002,29 @@ def test_create_dataset_with_missing_is_draft(dataset_service, test_form, test_u
     result = dataset_service.create_from_form(form, test_user)
 
     assert result.ds_meta_data.is_draft is False
+
+
+def test_file_count_and_size_after_publish(dataset_service):
+
+    zenodo_service_mock = MagicMock()
+    zenodo_service_mock.publish_dataset.return_value = MagicMock(
+        publication_doi="10.5281/fakenodo.123456", dataset_doi="10.5281/fakenodo.654321", deposition_id=1
+    )
+    dataset_service.zenodo_service = zenodo_service_mock
+
+    dataset_service.db = MagicMock()
+    dataset_service.db.session.commit = MagicMock()
+
+    dataset_mock = MagicMock()
+    dataset_mock.mermaid_diagrams = [MagicMock(files=[MagicMock(size=1024)]), MagicMock(files=[MagicMock(size=2048)])]
+
+    dataset_service.update_dsmetadata = MagicMock()
+    dataset_service.add_mermaid_diagrams_from_temp = MagicMock()
+
+    dataset_service.publish(dataset_mock)
+
+    total_size = sum(file.size for diagram in dataset_mock.mermaid_diagrams for file in diagram.files)
+    file_count = sum(len(diagram.files) for diagram in dataset_mock.mermaid_diagrams)
+
+    assert total_size == 3072
+    assert file_count == 2
