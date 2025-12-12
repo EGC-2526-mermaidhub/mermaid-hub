@@ -111,22 +111,28 @@
         </div>
 
         {% if dataset.ds_meta_data.is_draft %}
-        <div class="row mb-3">
-          <div class="col-md-4 col-12"></div>
-          <div class="col-md-8 col-12">
-
-            <button
-              class="btn btn-success btn-sm me-2"
-              style="border-radius: 5px;"
-              data-bs-toggle="modal"
-              data-bs-target="#publishDatasetModal"
-            >
-              <i data-feather="upload"></i>
-              Publish dataset
-            </button>
-          </div>
-        </div>
+            <div class="row mb-3">
+                <div class="col-md-4 col-12"></div>
+                <div class="col-md-8 col-12">
+                    <button 
+                        class="btn btn-success btn-sm w-10" 
+                        style="border-radius: 5px;" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#publishDatasetModal">
+                        <i data-feather="upload"></i> Publish dataset
+                    </button>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-4 col-12"></div>
+                <div class="col-md-8 col-12">
+                    <a href="{{ url_for('dataset.edit_dataset', dataset_id=dataset.id) }}" class="btn btn-secondary btn-sm w-10" style="border-radius: 5px;">
+                        <i data-feather="edit"></i> Edit dataset
+                    </a>
+                </div>
+            </div>
         {% endif %}
+
 
         {% if dataset.ds_meta_data.publication_doi %}
         <div class="row mb-2">
