@@ -266,7 +266,7 @@
 
                             <h4 class="h4 mb-3" class="stats-color">
                                 <i data-feather="file" class="align-middle mr-2 stats-color"></i>&nbsp;{{
-                                mermaid_diagrams_counter }} feature models
+                                mermaid_diagrams_counter }} mermaid models
                             </h4>
 
                             <h4 class="h4 mb-3" class="stats-color">
@@ -276,7 +276,7 @@
 
                             <h4 class="h4 mb-3" class="stats-color">
                                 <i data-feather="eye" class="align-middle mr-2 stats-color"></i>&nbsp;{{
-                                total_mermaid_diagram_views }} feature models viewed
+                                total_mermaid_diagram_views }} mermaid models viewed
                             </h4>
 
                             <h4 class="h4 mb-3" class="stats-color">
@@ -286,7 +286,7 @@
 
                             <h4 class="h4" class="stats-color">
                                 <i data-feather="download" class="align-middle mr-2 stats-color"></i>&nbsp;{{
-                                total_mermaid_diagram_downloads }} feature models downloaded
+                                total_mermaid_diagram_downloads }} mermaid models downloaded
                             </h4>
 
                         </h1>
@@ -449,7 +449,7 @@
         datasets.forEach(dataset => {
             const doiLink = dataset.doi || '#';
             const downloadLink = `/dataset/download/${dataset.id}`;
-            const tags = dataset.tags ? dataset.tags.split(',').map(tag => 
+            const tags = dataset.tags ? dataset.tags.split(',').map(tag =>
                 `<span class="badge bg-secondary">${tag.trim()}</span>`
             ).join('') : '';
 
