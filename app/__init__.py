@@ -53,6 +53,10 @@ def create_app(config_name="development"):
 
     limiter.init_app(app)
     app.register_error_handler(429, limit_exceeded_handler)
+    if os.getenv("LOAD_TESTS") == "TRUE":
+        limiter.enabled = False
+    else:
+        limiter.enabled = True
     # Register login manager
     from flask_login import LoginManager
 
