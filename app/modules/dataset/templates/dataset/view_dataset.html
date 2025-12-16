@@ -114,10 +114,10 @@
             <div class="row mb-3">
                 <div class="col-md-4 col-12"></div>
                 <div class="col-md-8 col-12">
-                    <button 
-                        class="btn btn-success btn-sm w-10" 
-                        style="border-radius: 5px;" 
-                        data-bs-toggle="modal" 
+                    <button
+                        class="btn btn-success btn-sm w-10"
+                        style="border-radius: 5px;"
+                        data-bs-toggle="modal"
                         data-bs-target="#publishDatasetModal">
                         <i data-feather="upload"></i> Publish dataset
                     </button>
@@ -244,7 +244,7 @@
         <div class="row">
           <div class="col-12 d-flex justify-content-between align-items-center">
             <h4 style="margin-bottom: 0px">Mermaid models</h4>
-            <h4 style="margin-bottom: 0px;"><span class="badge bg-success">{{ dataset.get_files_count() }}</span></h4>
+            <h4 style="margin-bottom: 0px;"><span class="badge bg-primary">{{ dataset.get_files_count() }}</span></h4>
           </div>
         </div>
 
@@ -359,9 +359,9 @@
       {% for rec in recommended_datasets %}
       <div class="col-12 col-md-6 col-xl-4">
         <div class="card h-100 shadow rounded-3 border">
-          
+
           <div class="card-header bg-light d-flex align-items-center justify-content-between p-3">
-            
+
             <div class="d-flex flex-column me-2">
               <h6 class="card-title mb-1 text-primary">
                 <a href="{{ url_for('dataset.subdomain_index', doi=rec.ds_meta_data.dataset_doi) }}" class="text-decoration-none fw-bold">
@@ -541,7 +541,7 @@
           `
           import js
 
-          file_content = js.document.getElementById('fileContent').textContent 
+          file_content = js.document.getElementById('fileContent').textContent
           div = js.document.createElement("result")
 
           with open("uvlfile.uvl", "w") as text_file:
